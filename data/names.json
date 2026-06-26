@@ -1,0 +1,8 @@
+{
+  "names": [
+    { "name": "Aldric Thorne", "race": "Human", "region": "Heartlands", "gender": "Male" },
+    { "name": "Mirelle Vance", "race": "Human", "region": "Coastlands", "gender": "Female" },
+    { "name": "Faelar Nightbreeze", "race": "Elf", "region": "Silverwood", "gender": "Female" },
+    { "name": "Bromli Stonehand", "race": "Dwarf", "region": "Ironpeak", "gender": "Male" }
+  ]
+}

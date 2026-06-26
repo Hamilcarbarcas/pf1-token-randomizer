@@ -1,0 +1,219 @@
+<div class="token-randomizer-settings">
+
+  {{!-- Tab Bar --}}
+  <nav class="randomizer-tabs">
+    <button type="button" class="randomizer-tab-btn {{#if (eq activeTab 'ability-scores')}}active{{/if}}" data-action="switchTab" data-tab="ability-scores">
+      <i class="fas fa-dice-d20"></i> Ability Scores
+    </button>
+    <button type="button" class="randomizer-tab-btn {{#if (eq activeTab 'name')}}active{{/if}}" data-action="switchTab" data-tab="name">
+      <i class="fas fa-signature"></i> Name
+    </button>
+    <button type="button" class="randomizer-tab-btn {{#if (eq activeTab 'treasure')}}active{{/if}}" data-action="switchTab" data-tab="treasure">
+      <i class="fas fa-coins"></i> Treasure
+    </button>
+  </nav>
+
+  {{!-- ═══════════ Ability Scores Tab ═══════════ --}}
+  {{#if (eq activeTab "ability-scores")}}
+  <div class="tab-content">
+    <div class="settings-section">
+      <div class="setting-row enable-row">
+        <label>
+          <input type="checkbox" class="randomizer-enabled" {{#if abilityEnabled}}checked{{/if}} />
+          <span>Enable Ability Score Randomization</span>
+        </label>
+      </div>
+      <p class="hint">When enabled, ability scores will be randomized when an unlinked token of this actor is placed on a scene.</p>
+    </div>
+
+    <div class="settings-section method-section {{#unless abilityEnabled}}disabled{{/unless}}">
+      <h3>Generation Method</h3>
+      <select class="randomizer-method" {{#unless abilityEnabled}}disabled{{/unless}}>
+        {{#each methods}}
+        <option value="{{key}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+        {{/each}}
+      </select>
+    </div>
+
+    <div class="settings-section constraints-section {{#unless abilityEnabled}}disabled{{/unless}}">
+      <h3>Ability Score Constraints</h3>
+      <p class="hint">Set minimum and maximum values for each ability score. Scores will be assigned and clamped to fit these ranges.</p>
+
+      <div class="setting-row prioritize-row">
+        <label>
+          <input type="checkbox" class="prioritize-enabled" {{#if prioritizeEnabled}}checked{{/if}} {{#unless abilityEnabled}}disabled{{/unless}} />
+          <span>Enable Priority Assignment</span>
+        </label>
+      </div>
+      <p class="hint">When enabled, abilities with higher priority (6 = highest) will receive higher scores. Equal priorities are assigned randomly. Priority is secondary to min/max constraints.</p>
+
+      <p class="hint">Check <strong>Nil</strong> to leave an ability blank ("&mdash;") instead of assigning a score &mdash; the modifier becomes +0 and the ability is treated as absent (e.g. mindless creatures with no Intelligence). This is not the same as a score of 0, which gives a &minus;5 modifier.</p>
+
+      <div class="constraints-grid">
+        <div class="constraint-header">
+          <span class="ability-name-header">Ability</span>
+          <span class="min-header">Min</span>
+          <span class="max-header">Max</span>
+          <span class="priority-header {{#unless prioritizeEnabled}}disabled{{/unless}}">Priority</span>
+          <span class="nil-header">Nil</span>
+        </div>
+        {{#each abilities}}
+        <div class="constraint-row">
+          <span class="ability-name">{{name}}</span>
+          <input type="number" class="ability-min" data-ability="{{key}}" value="{{min}}" min="0" max="18" {{#if nil}}disabled{{/if}} {{#unless ../abilityEnabled}}disabled{{/unless}} />
+          <input type="number" class="ability-max" data-ability="{{key}}" value="{{max}}" min="0" max="25" {{#if nil}}disabled{{/if}} {{#unless ../abilityEnabled}}disabled{{/unless}} />
+          <input type="number" class="ability-priority {{#unless ../prioritizeEnabled}}disabled{{/unless}}" data-ability="{{key}}" value="{{#if ../prioritizeEnabled}}{{priority}}{{/if}}" min="0" max="6" placeholder="-" {{#if nil}}disabled{{/if}} {{#unless ../prioritizeEnabled}}disabled{{/unless}} />
+          <input type="checkbox" class="ability-nil" data-ability="{{key}}" {{#if nil}}checked{{/if}} {{#unless ../abilityEnabled}}disabled{{/unless}} />
+        </div>
+        {{/each}}
+      </div>
+    </div>
+  </div>
+  {{/if}}
+
+  {{!-- ═══════════ Name Tab ═══════════ --}}
+  {{#if (eq activeTab "name")}}
+  <div class="tab-content">
+    <div class="settings-section">
+      <div class="setting-row enable-row">
+        <label>
+          <input type="checkbox" class="name-enabled" {{#if nameEnabled}}checked{{/if}} />
+          <span>Enable Name Randomization</span>
+        </label>
+      </div>
+      <p class="hint">When enabled, the token name will be randomly selected from the name database when an unlinked token is placed.</p>
+    </div>
+
+    <div class="settings-section name-filters-section {{#unless nameEnabled}}disabled{{/unless}}">
+      <h3>Name Filters</h3>
+      <p class="hint">Filter the name pool by race, region, and/or gender. Leave blank to include all.</p>
+
+      <div class="filter-row">
+        <label>Race</label>
+        <select class="name-race" {{#unless nameEnabled}}disabled{{/unless}}>
+          <option value="">Any</option>
+          {{#each races}}
+          <option value="{{this}}" {{#if (eq this ../nameRace)}}selected{{/if}}>{{this}}</option>
+          {{/each}}
+        </select>
+      </div>
+
+      <div class="filter-row">
+        <label>Region</label>
+        <select class="name-region" {{#unless nameEnabled}}disabled{{/unless}}>
+          <option value="">Any</option>
+          {{#each regions}}
+          <option value="{{this}}" {{#if (eq this ../nameRegion)}}selected{{/if}}>{{this}}</option>
+          {{/each}}
+        </select>
+      </div>
+
+      {{#if hasRegionSelected}}
+      <div class="filter-row variance-row {{#unless nameEnabled}}disabled{{/unless}}">
+        <label>Regional Variance</label>
+        <div class="slider-group">
+          <input type="range" class="name-regional-variance" min="0" max="100" value="{{nameRegionalVariance}}" {{#unless nameEnabled}}disabled{{/unless}} />
+          <span class="regional-variance-value">{{nameRegionalVariance}}%</span>
+        </div>
+      </div>
+      <p class="hint variance-hint">Percentage of names drawn from any region instead of the selected one. Race and gender filters still apply.</p>
+      {{/if}}
+
+      <div class="filter-row">
+        <label>Gender</label>
+        <select class="name-gender" {{#unless nameEnabled}}disabled{{/unless}}>
+          <option value="">Any</option>
+          {{#each genders}}
+          <option value="{{this}}" {{#if (eq this ../nameGender)}}selected{{/if}}>{{this}}</option>
+          {{/each}}
+        </select>
+      </div>
+    </div>
+
+    <div class="settings-section name-database-section">
+      <p class="hint">{{nameCount}} names loaded in the name database.</p>
+      {{#if isDefaults}}
+      <p class="hint">Import a CSV/TSV file (columns: name, race, region, gender) or a JSON file (<code>{ "names": [...] }</code>). Imported names are saved to this world and replace the bundled sample.</p>
+      <button type="button" class="import-csv-btn" data-action="importData">
+        <i class="fas fa-file-import"></i> Import Names
+      </button>
+      {{/if}}
+    </div>
+  </div>
+  {{/if}}
+
+  {{!-- ═══════════ Treasure Tab ═══════════ --}}
+  {{#if (eq activeTab "treasure")}}
+  <div class="tab-content">
+    <div class="settings-section">
+      <div class="setting-row enable-row">
+        <label>
+          <input type="checkbox" class="treasure-enabled" {{#if treasureEnabled}}checked{{/if}} />
+          <span>Enable Treasure Randomization</span>
+        </label>
+      </div>
+      <p class="hint">When enabled, the actor's carried currency (pp/gp/sp/cp) is generated and <strong>replaced</strong> when an unlinked token of this actor is placed on a scene.</p>
+    </div>
+
+    <div class="settings-section treasure-value-section {{#unless treasureEnabled}}disabled{{/unless}}">
+      <h3>Total Value</h3>
+      <p class="hint">Total treasure value in gold pieces. Supports dice and actor data, e.g. <code>2d6*100</code> or <code>@details.cr.total * 50</code>.</p>
+      <input type="text" class="treasure-gold-formula" value="{{treasureGoldFormula}}" placeholder="e.g. 2d6*100" {{#unless treasureEnabled}}disabled{{/unless}} />
+    </div>
+
+    <div class="settings-section treasure-dist-section {{#unless treasureEnabled}}disabled{{/unless}}">
+      <h3>Coin Distribution</h3>
+      <p class="hint">Share of the total <em>value</em> held in each coin type (computed as gold-equivalent, then converted to coins). Each coin count is rounded down.</p>
+
+      <div class="setting-row prioritize-row">
+        <label>
+          <input type="checkbox" class="treasure-randomize-distribution" {{#if treasureRandomizeDistribution}}checked{{/if}} {{#unless treasureEnabled}}disabled{{/unless}} />
+          <span>Randomize Distribution</span>
+        </label>
+      </div>
+      <p class="hint">{{#if treasureRandomizeDistribution}}A random weight is picked within each coin's Min/Max (0–100), then the four weights are normalized into proportions of the total value.{{else}}The four percentages are normalized by their sum, so they need not add up to exactly 100.{{/if}}</p>
+
+      <div class="constraints-grid">
+        {{#if treasureRandomizeDistribution}}
+        <div class="constraint-header treasure-header-minmax">
+          <span class="ability-name-header">Coin</span>
+          <span class="min-header">Min</span>
+          <span class="max-header">Max</span>
+        </div>
+        {{#each coins}}
+        <div class="constraint-row treasure-row-minmax">
+          <span class="ability-name">{{name}}</span>
+          <input type="number" class="treasure-min" data-coin="{{key}}" value="{{min}}" min="0" max="100" {{#unless ../treasureEnabled}}disabled{{/unless}} />
+          <input type="number" class="treasure-max" data-coin="{{key}}" value="{{max}}" min="0" max="100" {{#unless ../treasureEnabled}}disabled{{/unless}} />
+        </div>
+        {{/each}}
+        {{else}}
+        <div class="constraint-header treasure-header-pct">
+          <span class="ability-name-header">Coin</span>
+          <span class="pct-header">Percent</span>
+        </div>
+        {{#each coins}}
+        <div class="constraint-row treasure-row-pct">
+          <span class="ability-name">{{name}}</span>
+          <input type="number" class="treasure-pct" data-coin="{{key}}" value="{{pct}}" min="0" {{#unless ../treasureEnabled}}disabled{{/unless}} />
+        </div>
+        {{/each}}
+        {{/if}}
+      </div>
+    </div>
+  </div>
+  {{/if}}
+
+  {{!-- ═══════════ Shared Actions ═══════════ --}}
+  <div class="settings-actions">
+    {{#unless isDefaults}}
+    <button type="button" class="reset-defaults-btn" data-action="reset" title="Reset to module default settings">
+      <i class="fas fa-undo"></i> Reset to Defaults
+    </button>
+    {{/unless}}
+    <div class="action-buttons">
+      <button type="button" class="settings-cancel-btn" data-action="cancel">Cancel</button>
+      <button type="button" class="settings-ok-btn" data-action="save">Save</button>
+    </div>
+  </div>
+</div>

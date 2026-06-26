@@ -1,0 +1,41 @@
+{
+  "id": "pf1-token-randomizer",
+  "title": "PF1 Token Randomizer",
+  "description": "Randomize ability scores, names, and carried treasure for unlinked tokens as they are placed on a scene. Configured per-actor from the character sheet.",
+  "authors": [
+    {
+      "name": "Hamilcar Barca",
+      "flags": {}
+    }
+  ],
+  "version": "1.0.0",
+  "compatibility": {
+    "minimum": "13",
+    "verified": "13"
+  },
+  "relationships": {
+    "systems": [
+      {
+        "id": "pf1",
+        "type": "system"
+      }
+    ]
+  },
+  "dependencies": [
+    {
+      "id": "pf1",
+      "type": "system"
+    }
+  ],
+  "esmodules": [
+    "scripts/token-randomizer.mjs"
+  ],
+  "styles": [
+    "styles/token-randomizer.css"
+  ],
+  "url": "https://github.com/Hamilcarbarcas/pf1-token-randomizer",
+  "readme": "https://github.com/Hamilcarbarcas/pf1-token-randomizer/blob/main/README.md",
+  "bugs": "https://github.com/Hamilcarbarcas/pf1-token-randomizer/issues",
+  "manifest": "https://github.com/Hamilcarbarcas/pf1-token-randomizer/releases/latest/download/module.json",
+  "download": "https://github.com/Hamilcarbarcas/pf1-token-randomizer/releases/download/v1.0.0/module.zip"
+}
