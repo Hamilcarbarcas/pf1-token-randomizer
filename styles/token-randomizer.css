@@ -1,45 +1,52 @@
 /* PF1 Token Randomizer — settings dialog styles.
- * All rules are scoped under the application's `.pf1-token-randomizer` frame class
+ *
+ * Dark-theme native, matching the look of the other mods' GUIs: amber accent,
+ * translucent-white text/surfaces, flat underline tabs, and amber-gradient
+ * primary buttons. Form controls (inputs/selects/range) are left to Foundry's
+ * own theming so they track the active theme automatically.
+ *
+ * Everything is scoped under the application frame class `.pf1-token-randomizer`
  * so nothing leaks into other windows. */
+
+.pf1-token-randomizer {
+  --tr-accent: #e8a63e;
+}
 
 .pf1-token-randomizer .token-randomizer-settings {
   padding: 8px;
+  font-family: var(--font-primary, "Signika", sans-serif);
 }
 
 /* ── Tab Bar ── */
 .pf1-token-randomizer .randomizer-tabs {
   display: flex;
-  gap: 4px;
+  gap: 0;
   margin-bottom: 12px;
-  border-bottom: 2px solid #7a7971;
-  padding-bottom: 0;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.1);
 }
 
 .pf1-token-randomizer .randomizer-tab-btn {
-  padding: 6px 16px;
-  border: 1px solid #999;
-  border-bottom: none;
-  border-radius: 4px 4px 0 0;
-  background: rgba(0, 0, 0, 0.08);
-  color: #555;
+  flex: 1;
+  padding: 6px 8px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: none;
+  color: rgba(255, 255, 255, 0.5);
   cursor: pointer;
   font-size: 13px;
-  font-weight: 500;
-  position: relative;
-  bottom: -2px;
-  width: auto;
+  font-weight: 600;
+  margin-bottom: -2px;
+  transition: color 0.15s, border-color 0.15s;
 }
 
 .pf1-token-randomizer .randomizer-tab-btn:hover {
-  background: rgba(0, 0, 0, 0.15);
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .pf1-token-randomizer .randomizer-tab-btn.active {
-  background: var(--color-bg, #f0f0e0);
-  color: #111;
-  border-color: #7a7971;
-  font-weight: 600;
-  border-bottom: 2px solid var(--color-bg, #f0f0e0);
+  color: #fff;
+  border-bottom-color: var(--tr-accent);
 }
 
 .pf1-token-randomizer .randomizer-tab-btn i {
@@ -63,20 +70,21 @@
 .pf1-token-randomizer .settings-section h3 {
   margin: 0 0 8px 0;
   font-size: 14px;
-  border-bottom: 1px solid #999;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
   padding-bottom: 4px;
 }
 
 .pf1-token-randomizer .hint {
   font-size: 11px;
   font-style: italic;
-  color: #666;
+  color: rgba(255, 255, 255, 0.45);
   margin: 4px 0 8px 0;
 }
 
 .pf1-token-randomizer .enable-row {
   padding: 8px;
-  background: rgba(0, 100, 0, 0.1);
+  background: rgba(232, 166, 62, 0.08);
+  border: 1px solid rgba(232, 166, 62, 0.25);
   border-radius: 4px;
   margin-bottom: 4px;
 }
@@ -99,10 +107,6 @@
 /* ── Ability Scores Tab ── */
 .pf1-token-randomizer .method-section select {
   width: 100%;
-  padding: 3px 6px;
-  border-radius: 4px;
-  border: 1px solid #999;
-  line-height: 1.4;
 }
 
 .pf1-token-randomizer .constraints-grid {
@@ -118,7 +122,7 @@
   font-weight: bold;
   font-size: 12px;
   padding: 4px 8px;
-  background: rgba(0, 0, 0, 0.15);
+  background: rgba(255, 255, 255, 0.08);
   border-radius: 3px;
 }
 
@@ -127,13 +131,13 @@
   grid-template-columns: 1fr 54px 54px 54px 40px;
   gap: 8px;
   padding: 4px 8px;
-  background: rgba(0, 0, 0, 0.05);
+  background: rgba(255, 255, 255, 0.03);
   border-radius: 3px;
   align-items: center;
 }
 
 .pf1-token-randomizer .constraint-row:nth-child(odd) {
-  background: rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .pf1-token-randomizer .ability-name {
@@ -143,10 +147,7 @@
 .pf1-token-randomizer .ability-min,
 .pf1-token-randomizer .ability-max {
   width: 100%;
-  padding: 4px;
   text-align: center;
-  border: 1px solid #999;
-  border-radius: 3px;
 }
 
 .pf1-token-randomizer .min-header,
@@ -167,7 +168,7 @@
 
 .pf1-token-randomizer .prioritize-row {
   padding: 6px 8px;
-  background: rgba(0, 0, 100, 0.08);
+  background: rgba(255, 255, 255, 0.04);
   border-radius: 4px;
   margin-bottom: 4px;
 }
@@ -182,15 +183,11 @@
 
 .pf1-token-randomizer .ability-priority {
   width: 100%;
-  padding: 4px;
   text-align: center;
-  border: 1px solid #999;
-  border-radius: 3px;
 }
 
 .pf1-token-randomizer .ability-priority.disabled {
   opacity: 0.4;
-  background: rgba(0, 0, 0, 0.05);
 }
 
 /* ── Name Tab ── */
@@ -209,10 +206,6 @@
 
 .pf1-token-randomizer .filter-row select {
   flex: 1;
-  padding: 3px 6px;
-  border-radius: 4px;
-  border: 1px solid #999;
-  line-height: 1.4;
 }
 
 .pf1-token-randomizer .slider-group {
@@ -239,33 +232,35 @@
 }
 
 .pf1-token-randomizer .import-csv-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 6px 14px;
-  background: #564;
-  color: #fff;
-  border: 1px solid #453;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 4px;
   cursor: pointer;
   font-size: 12px;
   width: auto;
+  transition: background 0.15s, color 0.15s;
 }
 
 .pf1-token-randomizer .import-csv-btn:hover {
-  background: #675;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
 }
 
 /* ── Treasure Tab ── */
 .pf1-token-randomizer .treasure-gold-formula {
   width: 100%;
-  padding: 5px 8px;
-  border: 1px solid #999;
-  border-radius: 4px;
   font-family: monospace;
 }
 
 .pf1-token-randomizer .treasure-value-section code,
 .pf1-token-randomizer .treasure-dist-section code,
 .pf1-token-randomizer .name-database-section code {
-  background: rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 0.1);
   padding: 1px 4px;
   border-radius: 3px;
   font-size: 11px;
@@ -289,10 +284,7 @@
 .pf1-token-randomizer .treasure-max,
 .pf1-token-randomizer .treasure-pct {
   width: 100%;
-  padding: 4px;
   text-align: center;
-  border: 1px solid #999;
-  border-radius: 3px;
 }
 
 /* ── Shared Actions ── */
@@ -303,7 +295,7 @@
   gap: 8px;
   margin-top: 16px;
   padding-top: 12px;
-  border-top: 1px solid #999;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 .pf1-token-randomizer .action-buttons {
@@ -312,46 +304,54 @@
 }
 
 .pf1-token-randomizer .reset-defaults-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 6px 12px;
-  background: #886;
-  color: #fff;
-  border: 1px solid #664;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 4px;
   cursor: pointer;
   font-size: 12px;
   width: auto;
+  transition: background 0.15s, color 0.15s;
 }
 
 .pf1-token-randomizer .reset-defaults-btn:hover {
-  background: #997;
-}
-
-.pf1-token-randomizer .settings-ok-btn {
-  padding: 6px 16px;
-  background: #447;
+  background: rgba(255, 255, 255, 0.1);
   color: #fff;
-  border: 1px solid #335;
-  border-radius: 4px;
-  cursor: pointer;
-  font-weight: 600;
-  width: auto;
-}
-
-.pf1-token-randomizer .settings-ok-btn:hover {
-  background: #558;
 }
 
 .pf1-token-randomizer .settings-cancel-btn {
   padding: 6px 16px;
-  background: #eee;
-  color: #333;
-  border: 1px solid #aaa;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 4px;
   cursor: pointer;
   font-weight: 600;
   width: auto;
+  transition: background 0.15s, color 0.15s;
 }
 
 .pf1-token-randomizer .settings-cancel-btn:hover {
-  background: #ddd;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.pf1-token-randomizer .settings-ok-btn {
+  padding: 6px 16px;
+  background: linear-gradient(to bottom, #c08030, #a06820);
+  color: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+  width: auto;
+  transition: background 0.15s;
+}
+
+.pf1-token-randomizer .settings-ok-btn:hover {
+  background: linear-gradient(to bottom, #d09040, #b07830);
 }

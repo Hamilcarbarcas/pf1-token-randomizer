@@ -872,7 +872,7 @@ function updateRandomizerButtonColor(sheet) {
   const btn = el.querySelector?.(".token-randomizer-settings");
   if (btn) {
     if (randomizerActive) {
-      btn.style.color = "#f0c050";
+      btn.style.color = "#e8a63e";
       btn.title = "Randomizer (Active)";
     } else {
       btn.style.color = "";
