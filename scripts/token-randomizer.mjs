@@ -289,12 +289,16 @@ function assignScoresWithConstraints(scores, constraints, prioritizeEnabled = fa
 
 /**
  * Resolve the gold-value formula to a number. Supports dice and PF1 actor roll
- * data (e.g. "2d6*100", "@details.cr.total * 50"). Returns 0 on empty/invalid.
+ * data, plus the `@cr` shorthand (e.g. "2d6*100", "@cr * 50"). Returns 0 on
+ * empty/invalid.
  */
 async function resolveGoldValue(formula, actor) {
   if (!formula || !String(formula).trim()) return 0;
   try {
     const rollData = actor?.getRollData?.() ?? {};
+    // Convenience alias: `@cr` → the actor's total CR (details.cr.total), so users
+    // don't have to type the full path. Defaults to 0 for actors without a CR.
+    rollData.cr = foundry.utils.getProperty(rollData, "details.cr.total") ?? 0;
     const roll = new pf1.dice.RollPF(String(formula), rollData);
     await roll.evaluate({ async: true });
     return Math.max(0, roll.total ?? 0);

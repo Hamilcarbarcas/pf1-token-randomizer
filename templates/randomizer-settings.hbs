@@ -157,7 +157,7 @@
 
     <div class="settings-section treasure-value-section {{#unless treasureEnabled}}disabled{{/unless}}">
       <h3>Total Value</h3>
-      <p class="hint">Total treasure value in gold pieces. Supports dice and actor data, e.g. <code>2d6*100</code> or <code>@details.cr.total * 50</code>.</p>
+      <p class="hint">Total treasure value in gold pieces. Supports dice and actor data, e.g. <code>2d6*100</code> or <code>@cr * 50</code> (<code>@cr</code> = the actor's total CR).</p>
       <input type="text" class="treasure-gold-formula" value="{{treasureGoldFormula}}" placeholder="e.g. 2d6*100" {{#unless treasureEnabled}}disabled{{/unless}} />
     </div>
 
