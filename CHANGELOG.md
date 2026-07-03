@@ -9,10 +9,7 @@
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-06-28
+
 ### Added
-### Changed
-### Fixed
-
----
-
-_Releases prior to this changelog are documented on the [GitHub Releases page](https://github.com/Hamilcarbarcas/pf1-token-randomizer/releases)._
+- Initial release.
