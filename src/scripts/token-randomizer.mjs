@@ -65,7 +65,7 @@ function dedupeNames(entries) {
 
 async function loadBaselineNames() {
   try {
-    const response = await fetch(`modules/${MODULE_ID}/data/names.json`);
+    const response = await fetch(`modules/${MODULE_ID}/src/data/names.json`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const json = await response.json();
     return json.names ?? [];
@@ -549,7 +549,7 @@ class TokenRandomizerSettings extends HandlebarsApplicationMixin(ApplicationV2) 
   };
 
   static PARTS = {
-    body: { template: `modules/${MODULE_ID}/templates/randomizer-settings.hbs` }
+    body: { template: `modules/${MODULE_ID}/src/templates/randomizer-settings.hbs` }
   };
 
   /** Give each actor (and the defaults dialog) a stable, distinct window id. */
