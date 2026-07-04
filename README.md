@@ -1,33 +1,22 @@
 # PF1 Token Randomizer
 
-A Foundry VTT module for the **Pathfinder 1e** system that randomizes **ability scores**, **names**, and **carried treasure** for unlinked NPC tokens the moment they are dropped onto a scene. Configuration is per-actor (from the character/NPC sheet) with a world-wide set of defaults applied to new actors.
+A Foundry VTT module for the **Pathfinder 1e** system that randomizes **ability scores**, **names**, and **carried treasure** for unlinked NPC tokens the moment they are dropped onto a scene. Configuration is per-actor (from the character/NPC sheet).
 
-Drop five copies of the same goblin actor and end up with five goblins that have different stat spreads, different names, and different pocket change — without touching the prototype actor.
+Drop five copies of the same goblin actor and you can end up with five goblins that have different stat spreads, different names, and different pocket change — all without touching the parent actor.
 
-> Requires Foundry VTT **v13+** and the **Pathfinder 1st Edition** system. GM-only.
+> Requires Foundry VTT **v13+** and the **Pathfinder 1st Edition** system.
 
 ---
 
 ## Features
 
-- **Per-actor configuration.** A *Randomizer* button (🎲) appears in the header of character and NPC sheets. Each actor stores its own settings. The button glows gold when any randomizer is active for that actor.
+- **Per-actor configuration.** A *Randomizer* button is added to the header of character and NPC sheets with unlinked tokens. Each actor stores its own settings. The button glows gold when any randomizer is active for that actor.
 - **Three independent randomizers**, each toggled on/off separately:
   - **Ability Scores** — generated from a chosen method, then fitted to per-ability min/max constraints with optional priority weighting.
   - **Name** — assembled from modular **segments** (database names, random adjectives, static text) joined left to right, with weighted filters.
   - **Treasure** — a gold-value formula converted into a pp/gp/sp/cp coin spread.
-- **World defaults.** A *Token Randomizer Defaults* menu (in module settings) sets the baseline applied to every new actor. A separate *Token Randomizer Lists* menu manages the name database and adjective lists.
+- **World defaults.** A *Token Randomizer Defaults* menu (in module settings) sets the baseline applied to every new actor. A separate *Token Randomizer Lists* menu manages the name database and adjective lists, and a *Token Randomizer Stat Methods* menu adds custom ability-score arrays and dice formulas.
 - **Only touches unlinked tokens.** Linked tokens (which share the actor's real data) are never modified. Re-randomization is suppressed when a token is recreated by a scene/region teleport.
-
----
-
-## Installation
-
-1. In Foundry, go to **Add-on Modules → Install Module**.
-2. Paste the manifest URL into the bottom field:
-   ```
-   https://github.com/Hamilcarbarcas/pf1-token-randomizer/releases/latest/download/module.json
-   ```
-3. Enable **PF1 Token Randomizer** in your world's module settings.
 
 ---
 
@@ -35,7 +24,7 @@ Drop five copies of the same goblin actor and end up with five goblins that have
 
 ### Configuring a single actor
 
-Open a character or NPC sheet and click the **🎲 Randomizer** button in the window header. The dialog has three tabs — enable whichever randomizers you want, configure them, and click **Save**. Settings are stored on that actor. Use **Reset to Defaults** to copy the world default settings back into the dialog.
+Open a character or NPC sheet with an unlinked token and click the **🎲 Randomizer** button in the window header. The dialog has three tabs — enable whichever randomizers you want, configure them, and click **Save**. Settings are stored on that actor. Use **Reset to Defaults** to copy the world default settings back into the dialog.
 
 ### Setting world defaults
 
@@ -62,11 +51,22 @@ Pick a **generation method**:
 | Random High | 4d6 drop lowest per ability |
 | Random Extreme | 4d6 drop lowest, with the lowest result raised to 18 |
 
+You can also define your own methods (see [Custom stat methods](#custom-stat-methods) below); they appear in this same dropdown.
+
 The six generated values are then assigned to abilities subject to:
 
 - **Min / Max constraints** — each ability's value is fitted into its allowed range (and clamped if no generated value fits).
 - **Priority assignment** *(optional)* — give abilities a priority of 1–6 (6 highest). Higher-priority abilities claim the higher available scores first; equal priorities are assigned randomly. Priority is secondary to min/max.
 - **Nil** — check *Nil* to leave an ability blank ("—") instead of assigning a score. The modifier becomes +0 and the ability is treated as absent (e.g. a mindless creature with no Intelligence). This is **not** the same as a score of 0, which would give a −5 modifier. Nil abilities are excluded from the score pool so the rest still get full values.
+
+#### Custom stat methods
+
+Beyond the built-in methods, you can define your own under **Game Settings → Configure Settings → PF1 Token Randomizer → Manage Stat Methods**. Custom methods appear in the generation-method dropdown for every actor and the defaults dialog, labelled with their values/formula in parentheses. There are two kinds:
+
+- **Array** — six fixed values, exactly like Standard/Elite/Champion. Order does not matter; the six values are a pool that is assigned to abilities using each actor's min/max and priority settings.
+- **Formula** — a dice formula rolled once per ability, using the same syntax as the game's other formula fields (so `4d6dl1` is 4d6 drop-lowest, and `2d6+6` or `3d6` also work). Drop/keep modifiers (`dl`, `kh`, …) and `@`-references to the actor's roll data are supported.
+
+Deleting a custom method that an actor still references leaves that actor's saved selection showing as *(unavailable)* in the dropdown; until you pick a different method, it falls back to straight 10s when the token is placed.
 
 ### ✍️ Name
 
@@ -81,7 +81,7 @@ Components are shown in a framed **Name Components** box; click a component's he
 
 Add components with the **+ Roster Name / + Adjective / + Actor Name / + Static** buttons at the bottom of the box.
 
-**Duplicate avoidance.** When a token is placed, its rolled name is checked against the other tokens of the same actor already on the scene; if it collides, the name is re-rolled (up to 5 attempts) to keep siblings distinct. If no unique name can be found in 5 tries — or the name has no random components — the duplicate is kept, and a warning is shown when a random name genuinely couldn't be made unique.
+**Duplicate avoidance.** When a token is placed, its rolled name is checked against the other tokens of the same actor already on the scene; if it collides, the name is re-rolled (up to 5 attempts) to keep siblings distinct. If no unique name can be found in 5 tries — or the name has no random components — the duplicate is kept, and a warning is shown that a random name couldn't be made unique.
 
 > **Weights** are relative: only their ratios matter, and each slider runs 1–10. Setting several to the same value makes them equally likely.
 

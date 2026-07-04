@@ -1,0 +1,51 @@
+<div class="token-randomizer-stat-methods">
+  <div class="settings-section">
+    <h3>Custom Stat Methods</h3>
+    <p class="hint">Define reusable generation methods that appear in the Ability Scores <strong>method</strong> dropdown, alongside the built-in arrays and random methods. There are two kinds:</p>
+    <ul class="method-help hint">
+      <li><strong>Array</strong> — six fixed values, like Standard/Elite/Champion. Order does not matter; the values are assigned to abilities using each actor's min/max and priority settings.</li>
+      <li><strong>Formula</strong> — a dice formula rolled once per ability. Uses the same syntax as other formula fields, e.g. <code>4d6dl1</code> (4d6, drop lowest), <code>3d6</code>, or <code>2d6+6</code>.</li>
+    </ul>
+
+    <div class="stat-method-list">
+      {{#each methods}}
+      <div class="stat-method-row {{typeClass}}" data-index="{{index}}">
+        <div class="stat-method-head">
+          <span class="stat-method-type">
+            {{#if isFormula}}<i class="fas fa-dice"></i> Formula{{else}}<i class="fas fa-dice-d6"></i> Array{{/if}}
+          </span>
+          <input type="text" class="stat-method-label" data-index="{{index}}" value="{{label}}" placeholder="Name (e.g. Heroic)" />
+          <button type="button" class="stat-method-delete" data-action="removeMethod" data-index="{{index}}" title="Delete method"><i class="fas fa-trash"></i></button>
+        </div>
+
+        {{#if isFormula}}
+        <div class="stat-method-formula-row">
+          <input type="text" class="stat-method-formula" data-index="{{index}}" value="{{formula}}" placeholder="e.g. 4d6dl1" />
+        </div>
+        {{else}}
+        <div class="stat-method-values">
+          {{#each values}}
+          <input type="number" class="stat-method-value" data-method="{{../index}}" data-slot="{{@index}}" value="{{this}}" min="1" max="30" />
+          {{/each}}
+        </div>
+        {{/if}}
+      </div>
+      {{else}}
+      <p class="hint no-methods-hint">No custom methods yet. Add an array or a formula below.</p>
+      {{/each}}
+    </div>
+
+    <div class="stat-method-add-row">
+      <span class="segment-add-label">Add method:</span>
+      <button type="button" class="segment-add-btn" data-action="addMethod" data-type="array"><strong class="add-plus">+</strong> <i class="fas fa-dice-d6"></i> Array</button>
+      <button type="button" class="segment-add-btn" data-action="addMethod" data-type="formula"><strong class="add-plus">+</strong> <i class="fas fa-dice"></i> Formula</button>
+    </div>
+  </div>
+
+  <div class="settings-actions">
+    <div class="action-buttons">
+      <button type="button" class="settings-cancel-btn" data-action="cancel">Cancel</button>
+      <button type="button" class="settings-ok-btn" data-action="save">Save</button>
+    </div>
+  </div>
+</div>

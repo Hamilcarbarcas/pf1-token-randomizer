@@ -33,6 +33,43 @@ const STAT_METHODS = {
   "random-extreme": { label: "Random Extreme (4d6 drop lowest, lowest → 18)", roll: () => rollDice(4, 6, 1), postProcess: boostLowestTo18 }
 };
 
+// ─── Custom Stat Methods (user-defined arrays & formulas) ───────────────────────
+// GMs can define extra generation methods in the "Manage Stat Methods" menu; they
+// are stored as a world setting and merged into STAT_METHODS at use time. Each record
+// is one of:
+//   • { id, type: "array",   label, values: [6 numbers] }  — fixed array (like Elite)
+//   • { id, type: "formula", label, formula: "4d6dl1"    }  — dice formula, rolled per ability
+// Custom ids are random ("custom-<id>") so they never collide with the built-ins.
+
+/** Read the raw custom-method records from settings (always an array). */
+function getCustomStatMethods() {
+  const raw = game.settings.get(MODULE_ID, "custom-stat-methods");
+  return Array.isArray(raw) ? raw : [];
+}
+
+/**
+ * The full generation-method map: built-ins plus any valid custom records, keyed by
+ * id. Malformed customs (wrong value count, blank formula) are skipped so a bad entry
+ * can never break the dropdown or generation. The composed label mirrors the built-in
+ * style, appending the values/formula in parentheses.
+ */
+function getAllStatMethods() {
+  const all = { ...STAT_METHODS };
+  for (const m of getCustomStatMethods()) {
+    if (!m?.id) continue;
+    if (m.type === "formula") {
+      const formula = String(m.formula ?? "").trim();
+      if (!formula) continue;
+      all[m.id] = { label: `${m.label || m.id} (${formula})`, formula };
+    } else {
+      const values = Array.isArray(m.values) ? m.values.map(Number) : [];
+      if (values.length !== ABILITY_KEYS.length || values.some(v => !Number.isFinite(v))) continue;
+      all[m.id] = { label: `${m.label || m.id} (${values.join(", ")})`, values };
+    }
+  }
+  return all;
+}
+
 // ─── Name Database ───────────────────────────────────────────────────────────────
 // The effective name pool is the union of two sources:
 //   • Baseline  — data/names.json shipped inside the module (read-only; gets
@@ -368,10 +405,34 @@ function boostLowestTo18(scores) {
   return scores;
 }
 
-function generateScores(method) {
-  const config = STAT_METHODS[method];
+/**
+ * Evaluate a per-ability score formula (e.g. "4d6dl1", "3d6", "2d6+6") once, using
+ * the same dice engine and roll data as the treasure formula so `@`-references and
+ * dice modifiers behave like every other formula field. Rounds to an integer and
+ * falls back to 10 on any parse error.
+ */
+async function rollFormulaScore(formula, actor) {
+  try {
+    const rollData = actor?.getRollData?.() ?? {};
+    const roll = new pf1.dice.RollPF(String(formula), rollData);
+    await roll.evaluate({ async: true });
+    return Math.round(roll.total ?? 10);
+  } catch (err) {
+    console.error(`${LOG} Stat score formula error:`, err);
+    ui.notifications?.warn(`Ability randomizer: could not parse score formula "${formula}".`);
+    return 10;
+  }
+}
+
+async function generateScores(method, actor = null) {
+  const config = getAllStatMethods()[method];
   if (!config) return [10, 10, 10, 10, 10, 10];
   if (config.values) return [...config.values];
+  if (config.formula) {
+    const scores = [];
+    for (let i = 0; i < ABILITY_KEYS.length; i++) scores.push(await rollFormulaScore(config.formula, actor));
+    return scores;
+  }
   if (config.roll) {
     let scores = ABILITY_KEYS.map(() => config.roll());
     if (config.postProcess) scores = config.postProcess(scores);
@@ -562,14 +623,19 @@ const DEFAULT_SEGMENT_WEIGHT = 5;
 /**
  * Bring a stored name-randomizer config up to the current segment-based schema.
  * The pre-1.0 shape was flat — { enabled, race, region, gender, regionalVariance } —
- * and drew a single whole name from a filtered pool. It migrates to one `database`
- * segment holding a single filter with the old race/region/gender at default weight;
- * `regionalVariance` is dropped (it is superseded by per-filter weighting). Already
- * migrated configs (those with a `segments` array) pass through unchanged.
+ * and drew a single whole name from a filtered pool. A config that actually selected
+ * a Race/Region/Gender migrates to one `database` segment holding that filter at
+ * default weight; `regionalVariance` is dropped (it is superseded by per-filter
+ * weighting). A config with no filter selected — i.e. the plain default — becomes a
+ * single `actor` (Actor Name) component instead. Already migrated configs (those with
+ * a `segments` array) pass through unchanged.
  */
 function migrateNameSettings(settings) {
-  if (!settings) return { enabled: false, segments: [] };
+  if (!settings) return { enabled: false, segments: [{ type: "actor" }] };
   if (Array.isArray(settings.segments)) return settings;
+  if (!settings.race && !settings.region && !settings.gender) {
+    return { enabled: !!settings.enabled, segments: [{ type: "actor" }] };
+  }
   return {
     enabled: !!settings.enabled,
     segments: [{
@@ -646,8 +712,10 @@ async function randomizeTokenAbilityScores(tokenDoc) {
   const nilAbilities = ABILITY_KEYS.filter((a) => settings.constraints[a]?.nil);
   const activeAbilities = ABILITY_KEYS.filter((a) => !settings.constraints[a]?.nil);
 
-  let scores = generateScores(settings.method);
-  if (STAT_METHODS[settings.method]?.values) shuffleArray(scores);
+  let scores = await generateScores(settings.method, actor);
+  // Fixed arrays are an unordered pool, so shuffle before constraint assignment;
+  // formula/roll methods are already independent per ability and are left as-is.
+  if (getAllStatMethods()[settings.method]?.values) shuffleArray(scores);
 
   const assigned = assignScoresWithConstraints(
     scores,
@@ -899,12 +967,18 @@ class TokenRandomizerSettings extends HandlebarsApplicationMixin(ApplicationV2) 
         : foundry.utils.deepClone(getActorTreasureRandomizerSettings(this.actor));
     }
 
-    // Ability methods
-    const methods = Object.entries(STAT_METHODS).map(([key, config]) => ({
+    // Ability methods (built-ins + custom arrays/formulas).
+    const allMethods = getAllStatMethods();
+    const methods = Object.entries(allMethods).map(([key, config]) => ({
       key,
       label: config.label,
       selected: this.draftAbilitySettings.method === key
     }));
+    // If the saved method was deleted from the custom list, keep it visible (and
+    // selected) as an "unavailable" option so the selection isn't silently changed.
+    if (!allMethods[this.draftAbilitySettings.method]) {
+      methods.push({ key: this.draftAbilitySettings.method, label: `${this.draftAbilitySettings.method} (unavailable)`, selected: true });
+    }
 
     // Abilities with constraints & priorities
     const abilities = ABILITY_KEYS.map(key => ({
@@ -1435,6 +1509,132 @@ class TokenRandomizerListManager extends HandlebarsApplicationMixin(ApplicationV
   }
 }
 
+// ─── Stat Method Manager (custom arrays & formulas) ──────────────────────────────
+
+class TokenRandomizerStatMethods extends HandlebarsApplicationMixin(ApplicationV2) {
+  static DEFAULT_OPTIONS = {
+    classes: ["pf1-token-randomizer", "token-randomizer-stat-methods"],
+    tag: "div",
+    window: { title: "Manage Stat Methods", icon: "fas fa-dice-d6", resizable: true },
+    position: { width: 520, height: "auto" },
+    actions: {
+      addMethod: TokenRandomizerStatMethods.#onAddMethod,
+      removeMethod: TokenRandomizerStatMethods.#onRemoveMethod,
+      save: TokenRandomizerStatMethods.#onSave,
+      cancel: TokenRandomizerStatMethods.#onCancel
+    }
+  };
+
+  static PARTS = {
+    body: { template: `modules/${MODULE_ID}/src/templates/stat-methods.hbs` }
+  };
+
+  _initializeApplicationOptions(options) {
+    const applied = super._initializeApplicationOptions(options);
+    applied.uniqueId = "token-randomizer-stat-methods";
+    return applied;
+  }
+
+  async _prepareContext(options) {
+    // Draft copy so edits are only committed on Save (Cancel discards them).
+    if (!this.draft) this.draft = foundry.utils.deepClone(getCustomStatMethods());
+    return {
+      methods: this.draft.map((m, index) => {
+        const isFormula = m.type === "formula";
+        return {
+          index,
+          isFormula,
+          isArray: !isFormula,
+          typeClass: isFormula ? "is-formula" : "is-array",
+          label: m.label ?? "",
+          formula: m.formula ?? "",
+          // Six value fields, padded to the ability count so the grid is always full.
+          values: isFormula ? [] : ABILITY_KEYS.map((_, i) => m.values?.[i] ?? 10)
+        };
+      })
+    };
+  }
+
+  /** Wire the label / value / formula inputs into the draft (committed on Save). */
+  _onRender(context, options) {
+    const html = this.element;
+    const on = (selector, event, handler) => {
+      html.querySelectorAll(selector).forEach(el => el.addEventListener(event, handler));
+    };
+    on(".stat-method-label", "change", (e) => {
+      this.draft[Number(e.currentTarget.dataset.index)].label = e.currentTarget.value;
+    });
+    on(".stat-method-value", "change", (e) => {
+      const m = Number(e.currentTarget.dataset.method);
+      const slot = Number(e.currentTarget.dataset.slot);
+      if (!Array.isArray(this.draft[m].values)) this.draft[m].values = [];
+      this.draft[m].values[slot] = e.currentTarget.value; // raw; parsed/validated on Save
+    });
+    on(".stat-method-formula", "change", (e) => {
+      this.draft[Number(e.currentTarget.dataset.index)].formula = e.currentTarget.value;
+    });
+  }
+
+  static #onAddMethod(event, target) {
+    const type = target.dataset.type;
+    if (type === "formula") {
+      this.draft.push({ id: `custom-${foundry.utils.randomID()}`, type: "formula", label: "", formula: "4d6dl1" });
+    } else {
+      this.draft.push({ id: `custom-${foundry.utils.randomID()}`, type: "array", label: "", values: [15, 14, 13, 12, 10, 8] });
+    }
+    this.render();
+  }
+
+  static #onRemoveMethod(event, target) {
+    this.draft.splice(Number(target.dataset.index), 1);
+    this.render();
+  }
+
+  static async #onSave(event, target) {
+    // Validate every row before committing; abort (keeping the dialog open) on the
+    // first problem so nothing is silently dropped.
+    const cleaned = [];
+    for (let i = 0; i < this.draft.length; i++) {
+      const row = this.draft[i];
+      const label = String(row.label ?? "").trim();
+      if (!label) {
+        ui.notifications?.warn(`Stat method #${i + 1} needs a name.`);
+        return;
+      }
+      if (row.type === "formula") {
+        const formula = String(row.formula ?? "").trim();
+        if (!formula) {
+          ui.notifications?.warn(`Formula method "${label}" needs a formula.`);
+          return;
+        }
+        if (!Roll.validate(formula)) {
+          ui.notifications?.warn(`Method "${label}": "${formula}" is not a valid dice formula.`);
+          return;
+        }
+        cleaned.push({ id: row.id ?? `custom-${foundry.utils.randomID()}`, type: "formula", label, formula });
+      } else {
+        const values = (row.values ?? []).map(v => Number.parseInt(v, 10));
+        if (values.length !== ABILITY_KEYS.length || values.some(v => !Number.isFinite(v))) {
+          ui.notifications?.warn(`Array method "${label}" must have ${ABILITY_KEYS.length} numeric values.`);
+          return;
+        }
+        if (values.some(v => v < 1)) {
+          ui.notifications?.warn(`Array method "${label}" values must be at least 1.`);
+          return;
+        }
+        cleaned.push({ id: row.id ?? `custom-${foundry.utils.randomID()}`, type: "array", label, values });
+      }
+    }
+    await game.settings.set(MODULE_ID, "custom-stat-methods", cleaned);
+    ui.notifications?.info(`Saved ${cleaned.length} custom stat method${cleaned.length === 1 ? "" : "s"}.`);
+    this.close();
+  }
+
+  static #onCancel(event, target) {
+    this.close();
+  }
+}
+
 // ─── Header Button Hook ────────────────────────────────────────────────────────
 
 Hooks.on("getActorSheetHeaderButtons", (sheet, buttons) => {
@@ -1542,7 +1742,7 @@ Hooks.once("init", () => {
     type: Object,
     default: {
       enabled: false,
-      segments: []
+      segments: [{ type: "actor" }]
     }
   });
 
@@ -1565,6 +1765,15 @@ Hooks.once("init", () => {
     }
   });
 
+  game.settings.register(MODULE_ID, "custom-stat-methods", {
+    name: "Custom Stat Methods",
+    hint: "User-defined ability-score arrays and formulas for the randomizer.",
+    scope: "world",
+    config: false,
+    type: Array,
+    default: []
+  });
+
   game.settings.registerMenu(MODULE_ID, "randomizer-defaults-menu", {
     name: "Token Randomizer Defaults",
     label: "Configure Defaults",
@@ -1582,7 +1791,17 @@ Hooks.once("init", () => {
     type: TokenRandomizerListManager,
     restricted: true
   });
+
+  game.settings.registerMenu(MODULE_ID, "randomizer-stat-methods-menu", {
+    name: "Token Randomizer Stat Methods",
+    label: "Manage Stat Methods",
+    hint: "Define custom ability-score arrays and dice formulas for the generation-method dropdown.",
+    icon: "fas fa-dice-d6",
+    type: TokenRandomizerStatMethods,
+    restricted: true
+  });
 });
 
 window.TokenRandomizerSettings = TokenRandomizerSettings;
 window.TokenRandomizerListManager = TokenRandomizerListManager;
+window.TokenRandomizerStatMethods = TokenRandomizerStatMethods;

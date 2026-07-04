@@ -713,6 +713,114 @@
   color: #8fd08f;
 }
 
+/* ── Stat Method Manager (custom arrays & formulas) ── */
+.pf1-token-randomizer .token-randomizer-stat-methods {
+  padding: 8px;
+  font-family: var(--font-primary, "Signika", sans-serif);
+}
+
+.pf1-token-randomizer .token-randomizer-stat-methods code {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+.pf1-token-randomizer .method-help {
+  margin: 4px 0 10px 0;
+  padding-left: 18px;
+}
+
+.pf1-token-randomizer .method-help li {
+  margin-bottom: 4px;
+}
+
+.pf1-token-randomizer .stat-method-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.pf1-token-randomizer .stat-method-row {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 8px;
+}
+
+.pf1-token-randomizer .stat-method-head {
+  display: grid;
+  grid-template-columns: 92px 1fr 28px;
+  gap: 8px;
+  align-items: center;
+}
+
+.pf1-token-randomizer .stat-method-type {
+  font-weight: 600;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.pf1-token-randomizer .stat-method-type i {
+  color: var(--tr-accent);
+  margin-right: 4px;
+}
+
+.pf1-token-randomizer .stat-method-label {
+  width: 100%;
+}
+
+.pf1-token-randomizer .stat-method-delete {
+  width: 28px;
+  height: 24px;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.pf1-token-randomizer .stat-method-delete:hover {
+  background: rgba(200, 60, 60, 0.35);
+  color: #fff;
+}
+
+.pf1-token-randomizer .stat-method-values {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.pf1-token-randomizer .stat-method-value {
+  width: 100%;
+  text-align: center;
+}
+
+.pf1-token-randomizer .stat-method-formula-row {
+  margin-top: 8px;
+}
+
+.pf1-token-randomizer .stat-method-formula {
+  width: 100%;
+  font-family: monospace;
+}
+
+.pf1-token-randomizer .no-methods-hint {
+  text-align: center;
+  padding: 12px;
+  margin: 0;
+}
+
+.pf1-token-randomizer .stat-method-add-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
 /* ── Treasure Tab ── */
 .pf1-token-randomizer .treasure-gold-formula {
   width: 100%;
