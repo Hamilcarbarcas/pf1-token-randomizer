@@ -1,0 +1,81 @@
+<div class="token-randomizer-lists">
+
+  {{!-- ═══════════ Name Database ═══════════ --}}
+  <div class="settings-section">
+    <h3><i class="fas fa-signature"></i> Name Database</h3>
+    <p class="hint">
+      {{nameCount}} names loaded ({{givenCount}} given, {{surnameCount}} surname).
+      Your custom database is stored in the world folder and replaces the bundled sample once you import.
+    </p>
+    <p class="hint">
+      Import <strong>CSV / TSV / TXT</strong> (header row with a <code>name</code> column; optional
+      <code>type</code> (given/surname), <code>race</code>, <code>region</code>, <code>gender</code>) or
+      <strong>JSON</strong> (<code>{ "names": [...] }</code>). A missing <code>type</code> is treated as
+      <em>given</em>. Imports merge; exact duplicates are skipped.
+    </p>
+    <div class="list-actions">
+      <button type="button" class="list-btn" data-action="importNames">
+        <i class="fas fa-file-import"></i> Import Names
+      </button>
+      <button type="button" class="list-btn" data-action="exportNames" {{#unless hasNames}}disabled{{/unless}}>
+        <i class="fas fa-file-export"></i> Export as TSV
+      </button>
+    </div>
+  </div>
+
+  {{!-- ═══════════ Adjective Lists ═══════════ --}}
+  <div class="settings-section">
+    <h3><i class="fas fa-tags"></i> Adjective Lists</h3>
+    <p class="hint">
+      Single-column word lists used by <em>Adjective</em> name segments. Bundled lists ship with the module;
+      uploading a list with the same name overrides it, and any other name adds a new list. Upload a
+      <strong>TXT</strong> (one word per line), <strong>CSV</strong>, or <strong>JSON</strong> array.
+    </p>
+
+    {{#if hasAdjLists}}
+    <div class="adj-manage-list">
+      <div class="adj-manage-header">
+        <span class="col-name">List</span>
+        <span class="col-count">Words</span>
+        <span class="col-source">Source</span>
+        <span class="col-actions"></span>
+      </div>
+      {{#each adjLists}}
+      <div class="adj-manage-row">
+        <span class="col-name">{{name}}</span>
+        <span class="col-count">{{count}}</span>
+        <span class="col-source">
+          {{#if isBundled}}<span class="src-tag src-bundled">Bundled</span>{{/if}}
+          {{#if isOverridden}}<span class="src-tag src-overridden">Overridden</span>{{/if}}
+          {{#if isCustom}}<span class="src-tag src-custom">Custom</span>{{/if}}
+        </span>
+        <span class="col-actions">
+          <button type="button" class="list-btn small" data-action="replaceAdjList" data-list="{{name}}" title="Upload a replacement list">
+            <i class="fas fa-upload"></i> Replace
+          </button>
+          {{#if isOverridden}}
+          <button type="button" class="list-btn small" data-action="deleteAdjList" data-list="{{name}}" title="Revert to the bundled default">
+            <i class="fas fa-undo"></i> Revert
+          </button>
+          {{/if}}
+          {{#if isCustom}}
+          <button type="button" class="list-btn small list-btn-danger" data-action="deleteAdjList" data-list="{{name}}" title="Delete this custom list">
+            <i class="fas fa-trash"></i> Delete
+          </button>
+          {{/if}}
+        </span>
+      </div>
+      {{/each}}
+    </div>
+    {{else}}
+    <p class="hint">No adjective lists are defined.</p>
+    {{/if}}
+
+    <div class="list-actions">
+      <button type="button" class="list-btn" data-action="addAdjList">
+        <i class="fas fa-plus"></i> Add List
+      </button>
+    </div>
+  </div>
+
+</div>

@@ -1,0 +1,36 @@
+{
+  "lists": {
+    "threatening": [
+      "Menacing", "Savage", "Vicious", "Ruthless", "Brutal",
+      "Feral", "Sinister", "Bloodthirsty", "Merciless", "Predatory",
+      "Wrathful", "Ferocious", "Cruel", "Fearsome", "Hostile",
+      "Deadly", "Venomous", "Snarling", "Rabid", "Dreadful",
+      "Cutthroat", "Bloodstained", "Ravenous", "Hulking", "Scarred",
+      "Grim", "Baleful", "Malicious", "Wicked", "Terrifying"
+    ],
+    "friendly": [
+      "Cheerful", "Kindly", "Warmhearted", "Gentle", "Amiable",
+      "Welcoming", "Genial", "Good-natured", "Affable", "Jovial",
+      "Neighborly", "Cordial", "Gracious", "Sunny", "Helpful",
+      "Sociable", "Merry", "Sweet", "Beaming", "Hospitable",
+      "Tender", "Companionable", "Easygoing", "Approachable", "Benevolent",
+      "Chipper", "Charitable", "Wholesome", "Sympathetic", "Convivial"
+    ],
+    "serious": [
+      "Stern", "Solemn", "Grave", "Stoic", "Disciplined",
+      "Reserved", "Austere", "Somber", "Earnest", "Resolute",
+      "Composed", "Dignified", "Steadfast", "Unflinching", "Focused",
+      "Humorless", "Formal", "Diligent", "Sober", "Vigilant",
+      "Determined", "Measured", "Deliberate", "Guarded", "Unyielding",
+      "Principled", "Dour", "Studious", "Contemplative", "Intense"
+    ],
+    "goofy": [
+      "Silly", "Wacky", "Zany", "Clumsy", "Loopy",
+      "Bumbling", "Absurd", "Ridiculous", "Oddball", "Kooky",
+      "Daffy", "Giddy", "Whimsical", "Ditzy", "Harebrained",
+      "Scatterbrained", "Screwball", "Madcap", "Dorky", "Clownish",
+      "Nutty", "Loony", "Cuckoo", "Buffoonish", "Slaphappy",
+      "Playful", "Prankish", "Wobbly", "Featherbrained", "Goofy"
+    ]
+  }
+}

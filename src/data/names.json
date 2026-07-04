@@ -1,8 +1,14 @@
 {
   "names": [
-    { "name": "Aldric Thorne", "race": "Human", "region": "Heartlands", "gender": "Male" },
-    { "name": "Mirelle Vance", "race": "Human", "region": "Coastlands", "gender": "Female" },
-    { "name": "Faelar Nightbreeze", "race": "Elf", "region": "Silverwood", "gender": "Female" },
-    { "name": "Bromli Stonehand", "race": "Dwarf", "region": "Ironpeak", "gender": "Male" }
+    { "name": "Aldric", "type": "given", "race": "Human", "region": "Heartlands", "gender": "Male" },
+    { "name": "Mirelle", "type": "given", "race": "Human", "region": "Coastlands", "gender": "Female" },
+    { "name": "Faelar", "type": "given", "race": "Elf", "region": "Silverwood", "gender": "Male" },
+    { "name": "Sylwen", "type": "given", "race": "Elf", "region": "Silverwood", "gender": "Female" },
+    { "name": "Bromli", "type": "given", "race": "Dwarf", "region": "Ironpeak", "gender": "Male" },
+    { "name": "Hilda", "type": "given", "race": "Dwarf", "region": "Ironpeak", "gender": "Female" },
+    { "name": "Thorne", "type": "surname", "race": "Human", "region": "Heartlands", "gender": "" },
+    { "name": "Vance", "type": "surname", "race": "Human", "region": "Coastlands", "gender": "" },
+    { "name": "Nightbreeze", "type": "surname", "race": "Elf", "region": "Silverwood", "gender": "" },
+    { "name": "Stonehand", "type": "surname", "race": "Dwarf", "region": "Ironpeak", "gender": "" }
   ]
 }

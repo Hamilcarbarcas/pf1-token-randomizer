@@ -13,9 +13,9 @@ Drop five copies of the same goblin actor and end up with five goblins that have
 - **Per-actor configuration.** A *Randomizer* button (🎲) appears in the header of character and NPC sheets. Each actor stores its own settings. The button glows gold when any randomizer is active for that actor.
 - **Three independent randomizers**, each toggled on/off separately:
   - **Ability Scores** — generated from a chosen method, then fitted to per-ability min/max constraints with optional priority weighting.
-  - **Name** — drawn from a name database, filterable by race, region, and gender.
+  - **Name** — assembled from modular **segments** (database names, random adjectives, static text) joined left to right, with weighted filters.
   - **Treasure** — a gold-value formula converted into a pp/gp/sp/cp coin spread.
-- **World defaults.** A *Token Randomizer Defaults* menu (in module settings) sets the baseline applied to every new actor, and manages the name database.
+- **World defaults.** A *Token Randomizer Defaults* menu (in module settings) sets the baseline applied to every new actor. A separate *Token Randomizer Lists* menu manages the name database and adjective lists.
 - **Only touches unlinked tokens.** Linked tokens (which share the actor's real data) are never modified. Re-randomization is suppressed when a token is recreated by a scene/region teleport.
 
 ---
@@ -39,7 +39,7 @@ Open a character or NPC sheet and click the **🎲 Randomizer** button in the wi
 
 ### Setting world defaults
 
-Go to **Game Settings → Configure Settings → PF1 Token Randomizer → Configure Defaults**. This opens the same dialog in "defaults" mode. Whatever you save here becomes the starting configuration for newly created actors, and this is also where you **import the name database** (see below).
+Go to **Game Settings → Configure Settings → PF1 Token Randomizer → Configure Defaults**. This opens the same dialog in "defaults" mode. Whatever you save here becomes the starting configuration for newly created actors. The name database and adjective lists are managed separately under **Manage Lists** (see below).
 
 ### How randomization fires
 
@@ -70,36 +70,43 @@ The six generated values are then assigned to abilities subject to:
 
 ### ✍️ Name
 
-The token's name is replaced with a random entry from the **name database**, optionally filtered by:
+The token's name is **built from an ordered list of segments**, joined left to right with single spaces. Add as many as you like, reorder them with the ▲▼ arrows, and delete the ones you don't want. A **Sample** line at the top shows a live example (click the 🎲 to reroll it). If every segment resolves to nothing, the token name is left unchanged.
 
-- **Race**, **Region**, **Gender** — leave any filter blank to include all.
-- **Regional Variance** *(shown when a region is selected)* — a percent chance to ignore the region filter for a given token and pull a name from any region (race/gender filters still apply). Useful for "mostly local, occasionally foreign" populations.
+Components are shown in a framed **Name Components** box; click a component's header to collapse/expand it, and use **Clear** to remove them all. There are three component types:
 
-If no name matches the active filters, the name is left unchanged.
+- **Roster Name** — draws a name from the name database. Pick the **name type** (*Given name*, *Surname*, or *Given + Surname* — the last draws one of each from the same roll), then add one or more **filters**. Each filter is a Race / Region / Gender combination (any of which can be left as *Any*) with a **weight**. One filter is chosen at random in proportion to its weight, then a name is drawn uniformly from the names matching it. So three filters at equal weight are drawn from equally, regardless of how many names each matches.
+- **Adjective** — draws a random adjective. Check the **adjective lists** you want to draw from and set each one's weight; a list is picked by weight, then a random word from within it. The module ships with **threatening**, **friendly**, **serious**, and **goofy** lists, and you can add your own.
+- **Actor Name** — inserts the base actor's current name. Unlike a Static component, this tracks the actor: rename the actor and the inserted name follows automatically. It has no settings.
+- **Static** — a fixed string you type (e.g. `the Bold`), the same for every token.
 
-#### Name database
+Add components with the **+ Roster Name / + Adjective / + Actor Name / + Static** buttons at the bottom of the box.
 
-The effective name pool is sourced as follows:
+**Duplicate avoidance.** When a token is placed, its rolled name is checked against the other tokens of the same actor already on the scene; if it collides, the name is re-rolled (up to 5 attempts) to keep siblings distinct. If no unique name can be found in 5 tries — or the name has no random components — the duplicate is kept, and a warning is shown when a random name genuinely couldn't be made unique.
 
-- **No custom data yet** → the module's bundled **sample** (`data/names.json`, just a handful of demo names) is used.
-- **A custom database has been imported** → the sample is ignored entirely and only your custom names are used.
+> **Weights** are relative: only their ratios matter, and each slider runs 1–10. Setting several to the same value makes them equally likely.
 
-Your custom database is stored at `worlds/<your-world>/pf1-token-randomizer-names.json`. It lives in the world folder, so it survives module updates, is never synced to player clients, and travels with world backups.
+#### Name database & adjective lists
 
-**Importing names** (from the *Configure Defaults* dialog → Name tab → *Import Names*):
+Both are managed under **Game Settings → Configure Settings → PF1 Token Randomizer → Manage Lists**.
 
-- **CSV / TSV / TXT** — a header row with at least a `name` column; optional `race`, `region`, `gender` columns.
-  ```csv
-  name,race,region,gender
-  Aldric Thorne,Human,Heartlands,Male
-  Faelar Nightbreeze,Elf,Silverwood,Female
-  ```
-- **JSON** — either a bare array of entries or `{ "names": [ ... ] }`:
-  ```json
-  { "names": [ { "name": "Bromli Stonehand", "race": "Dwarf", "region": "Ironpeak", "gender": "Male" } ] }
-  ```
+**Name database.** The effective pool is the bundled **sample** (`data/names.json`) until you import your own, after which the sample is ignored and only your custom names are used. Your database is stored at `worlds/<your-world>/pf1-token-randomizer-names.json` — in the world folder, so it survives module updates, is never synced to player clients, and travels with world backups.
 
-Imports **merge** into your existing custom database; exact duplicates (same name/race/region/gender) are skipped.
+- **Import** — merge names from a file (exact duplicates are skipped):
+  - **CSV / TSV / TXT** — a header row with at least a `name` column; optional `type` (`given`/`surname`, defaulting to `given`), `race`, `region`, `gender`.
+    ```csv
+    name,type,race,region,gender
+    Aldric,given,Human,Heartlands,Male
+    Thorne,surname,Human,Heartlands,
+    ```
+  - **JSON** — a bare array or `{ "names": [ ... ] }`:
+    ```json
+    { "names": [ { "name": "Bromli", "type": "given", "race": "Dwarf", "region": "Ironpeak", "gender": "Male" } ] }
+    ```
+- **Export as TSV** — dump the current database (with the `type` column) to a file that round-trips back through Import.
+
+Databases from before the `type` column keep working — entries without a type are treated as **given names**.
+
+**Adjective lists.** Each list is a simple single-column list of words with a name. Bundled lists ship with the module; uploading a list with the **same name overrides** it (revertible), and any **other name adds** a new list. Custom lists can be deleted. Upload a **TXT** (one word per line), **CSV**, or a **JSON** array. Your lists live at `worlds/<your-world>/pf1-token-randomizer-adjectives.json`.
 
 ### 💰 Treasure
 

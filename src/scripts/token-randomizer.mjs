@@ -47,7 +47,24 @@ function userNamesPath() {
 }
 
 function nameKey(entry) {
-  return `${entry.name}|${entry.race ?? ""}|${entry.region ?? ""}|${entry.gender ?? ""}`;
+  return `${entry.name}|${entry.type ?? "given"}|${entry.race ?? ""}|${entry.region ?? ""}|${entry.gender ?? ""}`;
+}
+
+// Valid name-part types. Entries that predate this column (or arrive without one)
+// are treated as given names, matching the pre-segment behaviour where the whole
+// database was a pool of first names.
+const NAME_TYPES = ["given", "surname"];
+
+/** Coerce a raw entry into a normalized name record, defaulting a missing type to "given". */
+function normalizeNameEntry(entry) {
+  const type = String(entry.type ?? "").trim().toLowerCase();
+  return {
+    name: String(entry.name ?? "").trim(),
+    type: NAME_TYPES.includes(type) ? type : "given",
+    race: String(entry.race ?? "").trim(),
+    region: String(entry.region ?? "").trim(),
+    gender: String(entry.gender ?? "").trim()
+  };
 }
 
 function dedupeNames(entries) {
@@ -68,7 +85,7 @@ async function loadBaselineNames() {
     const response = await fetch(`modules/${MODULE_ID}/src/data/names.json`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const json = await response.json();
-    return json.names ?? [];
+    return (json.names ?? []).map(normalizeNameEntry).filter(e => e.name);
   } catch (err) {
     console.warn(`${LOG} Could not load baseline name database.`, err);
     return [];
@@ -81,7 +98,10 @@ async function loadUserNames() {
     const response = await fetch(`${userNamesPath()}?t=${Date.now()}`);
     if (!response.ok) return []; // 404 = no user data yet
     const json = await response.json();
-    return json.names ?? [];
+    // Normalize on load so pre-`type` databases keep working: every entry without
+    // a recognized type is read back as a given name. This is non-destructive — the
+    // file itself is only rewritten with the type column on the next import/export.
+    return (json.names ?? []).map(normalizeNameEntry).filter(e => e.name);
   } catch {
     return [];
   }
@@ -117,24 +137,81 @@ function getUniqueValues(db, field) {
   return [...vals].sort();
 }
 
+/** Build a <select> option model with a leading "Any" (empty value) choice. */
+function selectOptions(values, selected, anyLabel = "Any") {
+  const opts = [{ value: "", label: anyLabel, selected: !selected }];
+  for (const v of values) opts.push({ value: v, label: v, selected: v === selected });
+  return opts;
+}
+
+/**
+ * Turn the draft segment list into a render model for the name-builder template.
+ * Each segment gets type flags and its type-specific controls (database filter rows
+ * with per-row select options, adjective list toggles, or a static text field).
+ */
+function buildNameSegmentViewModels(segments, db, adjDb, collapsed) {
+  const races = getUniqueValues(db, "race");
+  const genders = getUniqueValues(db, "gender");
+  const adjNames = Object.keys(adjDb.lists).sort();
+  const list = segments ?? [];
+  return list.map((seg, index) => {
+    const vm = {
+      index,
+      isFirst: index === 0,
+      isLast: index === list.length - 1,
+      collapsed: collapsed?.has(index) ?? false
+    };
+    if (seg.type === "database") {
+      vm.isDatabase = true;
+      const nameType = seg.nameType ?? "given";
+      vm.nameTypeOptions = [
+        { value: "given", label: "Given name", selected: nameType === "given" },
+        { value: "surname", label: "Surname", selected: nameType === "surname" },
+        { value: "both", label: "Given + Surname", selected: nameType === "both" }
+      ];
+      vm.filters = (seg.filters ?? []).map((f, fi) => {
+        // Region choices depend on the row's race so users can't pick an impossible combo.
+        const regionSource = f.race ? { names: (db.names ?? []).filter(n => n.race === f.race) } : db;
+        return {
+          index: fi,
+          weight: f.weight ?? DEFAULT_SEGMENT_WEIGHT,
+          raceOptions: selectOptions(races, f.race ?? ""),
+          regionOptions: selectOptions(getUniqueValues(regionSource, "region"), f.region ?? ""),
+          genderOptions: selectOptions(genders, f.gender ?? "")
+        };
+      });
+    } else if (seg.type === "adjective") {
+      vm.isAdjective = true;
+      vm.noLists = adjNames.length === 0;
+      const enabled = new Map((seg.lists ?? []).map(l => [l.list, l.weight ?? DEFAULT_SEGMENT_WEIGHT]));
+      vm.lists = adjNames.map(name => ({
+        name,
+        enabled: enabled.has(name),
+        weight: enabled.get(name) ?? DEFAULT_SEGMENT_WEIGHT
+      }));
+    } else if (seg.type === "actor") {
+      // No settings — just inserts the base actor's name at resolution time.
+      vm.isActor = true;
+    } else {
+      vm.isStatic = true;
+      vm.text = seg.text ?? "";
+    }
+    return vm;
+  });
+}
+
 /**
  * Parse an imported file into normalized name entries. Supports JSON
  * ({ names: [...] } or a bare array) and delimited text (CSV / TSV / TXT with a
- * header row containing at least a "name" column; optional race/region/gender).
+ * header row containing at least a "name" column; optional type/race/region/gender).
+ * A missing/unknown `type` normalizes to "given".
  */
 async function parseNameFile(file) {
   const text = await file.text();
   if (file.name.toLowerCase().endsWith(".json")) {
     const data = JSON.parse(text);
     const arr = Array.isArray(data) ? data : (data.names ?? []);
-    return arr
-      .map(e => ({
-        name: String(e.name ?? "").trim(),
-        race: String(e.race ?? "").trim(),
-        region: String(e.region ?? "").trim(),
-        gender: String(e.gender ?? "").trim()
-      }))
-      .filter(e => e.name);
+    return arr.map(normalizeNameEntry).filter(e => e.name);
   }
 
   const lines = text.split(/\r?\n/).filter(l => l.trim());
@@ -143,6 +220,7 @@ async function parseNameFile(file) {
   const headers = lines[0].split(delimiter).map(h => h.trim().toLowerCase());
   const nameIdx = headers.indexOf("name");
   if (nameIdx === -1) throw new Error("file must have a 'name' column.");
+  const typeIdx = headers.indexOf("type");
   const raceIdx = headers.indexOf("race");
   const regionIdx = headers.indexOf("region");
   const genderIdx = headers.indexOf("gender");
@@ -151,14 +229,117 @@ async function parseNameFile(file) {
   for (let i = 1; i < lines.length; i++) {
     const cols = lines[i].split(delimiter).map(c => c.trim());
     if (!cols[nameIdx]) continue;
-    out.push({
+    out.push(normalizeNameEntry({
       name: cols[nameIdx],
+      type: typeIdx >= 0 ? (cols[typeIdx] || "") : "",
       race: raceIdx >= 0 ? (cols[raceIdx] || "") : "",
       region: regionIdx >= 0 ? (cols[regionIdx] || "") : "",
       gender: genderIdx >= 0 ? (cols[genderIdx] || "") : ""
-    });
+    }));
   }
   return out;
+}
+
+/** Serialize the name database to TSV (header + one row per entry) for export. */
+function namesToTSV(names) {
+  const header = ["name", "type", "race", "region", "gender"].join("\t");
+  const rows = names.map(n => [n.name, n.type ?? "given", n.race ?? "", n.region ?? "", n.gender ?? ""].join("\t"));
+  return [header, ...rows].join("\r\n");
+}
+
+// ─── Adjective Lists ─────────────────────────────────────────────────────────────
+// Adjective lists are single-column word lists, each identified by a name. The
+// effective set is the union of:
+//   • Bundled  — data/adjectives.json shipped with the module (functional defaults).
+//   • User     — worlds/<world-id>/pf1-token-randomizer-adjectives.json, written by
+//     the list manager. A user list with the same name as a bundled one OVERRIDES it;
+//     user lists with new names are ADDED. This lives in the world folder for the same
+//     reasons as the name database (survives updates, GM-only, travels with backups).
+let _adjectiveLists = null; // { name: string[] } merged cache
+
+function userAdjectivesPath() {
+  return `worlds/${game.world.id}/${MODULE_ID}-adjectives.json`;
+}
+
+/** Coerce a raw { name: words } map into trimmed, de-duped, non-empty word arrays. */
+function normalizeAdjectiveLists(raw) {
+  const out = {};
+  for (const [name, words] of Object.entries(raw ?? {})) {
+    const key = String(name).trim();
+    if (!key || !Array.isArray(words)) continue;
+    const cleaned = [...new Set(words.map(w => String(w).trim()).filter(Boolean))];
+    if (cleaned.length) out[key] = cleaned;
+  }
+  return out;
+}
+
+async function loadBundledAdjectives() {
+  try {
+    const response = await fetch(`modules/${MODULE_ID}/src/data/adjectives.json`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const json = await response.json();
+    return normalizeAdjectiveLists(json.lists);
+  } catch (err) {
+    console.warn(`${LOG} Could not load bundled adjective lists.`, err);
+    return {};
+  }
+}
+
+async function loadUserAdjectives() {
+  try {
+    const response = await fetch(`${userAdjectivesPath()}?t=${Date.now()}`);
+    if (!response.ok) return {}; // 404 = no user data yet
+    const json = await response.json();
+    return normalizeAdjectiveLists(json.lists);
+  } catch {
+    return {};
+  }
+}
+
+async function saveUserAdjectives(lists) {
+  const blob = new Blob([JSON.stringify({ lists }, null, 2)], { type: "application/json" });
+  const file = new File([blob], `${MODULE_ID}-adjectives.json`, { type: "application/json" });
+  const formData = new FormData();
+  formData.append("source", "data");
+  formData.append("target", `worlds/${game.world.id}`);
+  formData.append("upload", file);
+  const response = await fetch("/upload", { method: "POST", body: formData });
+  if (!response.ok) throw new Error(`upload failed (HTTP ${response.status})`);
+}
+
+/**
+ * Return the merged adjective lists (bundled ∪ user, user wins), plus per-list
+ * source metadata used by the list manager: "bundled" (default only), "overridden"
+ * (bundled name replaced by a user upload), or "custom" (user-only list).
+ */
+async function loadAdjectiveLists(force = false) {
+  if (_adjectiveLists && !force) return _adjectiveLists;
+  const bundled = await loadBundledAdjectives();
+  const user = await loadUserAdjectives();
+  const lists = { ...bundled, ...user };
+  const sources = {};
+  for (const name of Object.keys(lists)) {
+    if (user[name] && bundled[name]) sources[name] = "overridden";
+    else if (user[name]) sources[name] = "custom";
+    else sources[name] = "bundled";
+  }
+  _adjectiveLists = { lists, sources };
+  return _adjectiveLists;
+}
+
+/** Parse an uploaded single-column adjective file (one word per line, or a JSON array). */
+async function parseAdjectiveFile(file) {
+  const text = await file.text();
+  let words;
+  if (file.name.toLowerCase().endsWith(".json")) {
+    const data = JSON.parse(text);
+    words = Array.isArray(data) ? data : (data.words ?? data.adjectives ?? []);
+  } else {
+    words = text.split(/\r?\n/);
+  }
+  const cleaned = [...new Set(words.map(w => String(w).trim()).filter(Boolean))];
+  if (!cleaned.length) throw new Error("no words found in file.");
+  return cleaned;
 }
 
 // ─── Dice Helpers ──────────────────────────────────────────────────────────────
@@ -376,21 +557,45 @@ function getDefaultRandomizerSettings() {
   };
 }
 
+const DEFAULT_SEGMENT_WEIGHT = 5;
+
+/**
+ * Bring a stored name-randomizer config up to the current segment-based schema.
+ * The pre-1.0 shape was flat — { enabled, race, region, gender, regionalVariance } —
+ * and drew a single whole name from a filtered pool. It migrates to one `database`
+ * segment holding a single filter with the old race/region/gender at default weight;
+ * `regionalVariance` is dropped (it is superseded by per-filter weighting). Already
+ * migrated configs (those with a `segments` array) pass through unchanged.
+ */
+function migrateNameSettings(settings) {
+  if (!settings) return { enabled: false, segments: [] };
+  if (Array.isArray(settings.segments)) return settings;
+  return {
+    enabled: !!settings.enabled,
+    segments: [{
+      type: "database",
+      nameType: "given",
+      filters: [{
+        race: settings.race ?? "",
+        region: settings.region ?? "",
+        gender: settings.gender ?? "",
+        weight: DEFAULT_SEGMENT_WEIGHT
+      }]
+    }]
+  };
+}
+
 function getActorNameRandomizerSettings(actor) {
   const flags = actor?.getFlag?.(MODULE_ID, "nameRandomizer") ?? actor?.flags?.[MODULE_ID]?.nameRandomizer;
   const defaults = getDefaultNameRandomizerSettings();
   if (!flags) return defaults;
-  return foundry.utils.mergeObject(defaults, flags, { inplace: false });
+  // Migrate the raw flags first: the old shape stores its data in top-level keys
+  // that would be lost if merged against a `segments`-based default.
+  return foundry.utils.mergeObject(defaults, migrateNameSettings(flags), { inplace: false });
 }
 
 function getDefaultNameRandomizerSettings() {
-  return game.settings.get(MODULE_ID, "name-randomizer-defaults") || {
-    enabled: false,
-    race: "",
-    region: "",
-    gender: "",
-    regionalVariance: 0
-  };
+  return migrateNameSettings(game.settings.get(MODULE_ID, "name-randomizer-defaults"));
 }
 
 function getActorTreasureRandomizerSettings(actor) {
@@ -463,6 +668,94 @@ async function randomizeTokenAbilityScores(tokenDoc) {
   console.log(`${LOG} Randomized ability scores for ${actor.name}:`, assigned, nilAbilities.length ? { nil: nilAbilities } : "");
 }
 
+/**
+ * Pick one item from `items` with probability proportional to its weight (Model A:
+ * the weight selects the bucket, not the individual entry). All-zero weights fall
+ * back to a uniform pick so a fully-weighted-out segment is never silently dead.
+ */
+function weightedPick(items, weightFn) {
+  if (!items.length) return null;
+  const weights = items.map(i => Math.max(0, Number(weightFn(i)) || 0));
+  const sum = weights.reduce((a, b) => a + b, 0);
+  if (sum <= 0) return items[Math.floor(Math.random() * items.length)];
+  let r = Math.random() * sum;
+  for (let i = 0; i < items.length; i++) {
+    r -= weights[i];
+    if (r < 0) return items[i];
+  }
+  return items[items.length - 1];
+}
+
+/**
+ * Resolve a `database` segment to a string: pick one filter (weighted), then draw a
+ * uniform name from the pool matching that filter's race/region/gender (blank = Any)
+ * and the requested type. `both` draws a given AND a surname from the same filter roll.
+ */
+function resolveDatabaseSegment(seg, db) {
+  const filters = (seg.filters ?? []).filter(Boolean);
+  if (!filters.length) return "";
+  const filter = weightedPick(filters, f => f.weight);
+  if (!filter) return "";
+  const names = db.names ?? [];
+  const pool = (type) => names.filter(n =>
+    n.type === type &&
+    (!filter.race || n.race === filter.race) &&
+    (!filter.region || n.region === filter.region) &&
+    (!filter.gender || n.gender === filter.gender));
+  const pickUniform = (arr) => arr.length ? arr[Math.floor(Math.random() * arr.length)].name : "";
+  if (seg.nameType === "both") {
+    return [pickUniform(pool("given")), pickUniform(pool("surname"))].filter(Boolean).join(" ");
+  }
+  return pickUniform(pool(seg.nameType === "surname" ? "surname" : "given"));
+}
+
+/** Resolve an `adjective` segment: pick one enabled list (weighted), then a uniform word. */
+function resolveAdjectiveSegment(seg, adjDb) {
+  const available = (seg.lists ?? []).filter(l => l && adjDb.lists[l.list]?.length);
+  if (!available.length) return "";
+  const chosen = weightedPick(available, l => l.weight);
+  const words = adjDb.lists[chosen.list];
+  return words[Math.floor(Math.random() * words.length)];
+}
+
+/**
+ * Assemble a random name from the ordered segment list. Each segment resolves to a
+ * string; empty results are skipped, and the parts are joined with single spaces.
+ * `actorName` is the live base-actor name used by `actor` segments. Returns "" when
+ * nothing resolved (caller then leaves the token name unchanged).
+ */
+function buildRandomName(settings, db, adjDb, actorName = "") {
+  const parts = [];
+  for (const seg of settings.segments ?? []) {
+    let part = "";
+    if (seg.type === "database") part = resolveDatabaseSegment(seg, db);
+    else if (seg.type === "adjective") part = resolveAdjectiveSegment(seg, adjDb);
+    else if (seg.type === "static") part = String(seg.text ?? "").trim();
+    else if (seg.type === "actor") part = String(actorName ?? "").trim();
+    if (part) parts.push(part);
+  }
+  return parts.join(" ").replace(/\s+/g, " ").trim();
+}
+
+// How many times to re-roll a colliding name before giving up and accepting a duplicate.
+const MAX_NAME_TRIES = 5;
+
+/**
+ * Collect the names already in use on the scene by other tokens of the same base
+ * actor (linked or not), so a freshly placed token can avoid duplicating them.
+ */
+function usedSiblingNames(tokenDoc) {
+  const scene = tokenDoc.parent;
+  const names = new Set();
+  if (!scene?.tokens) return names;
+  for (const other of scene.tokens.contents) {
+    if (other.id === tokenDoc.id) continue;
+    if (other.actorId !== tokenDoc.actorId) continue;
+    if (other.name) names.add(other.name);
+  }
+  return names;
+}
+
 async function randomizeTokenName(tokenDoc) {
   const actor = tokenDoc.actor;
   if (!actor) return;
@@ -472,27 +765,39 @@ async function randomizeTokenName(tokenDoc) {
   if (!settings.enabled) return;
 
   const db = await loadNameDatabase();
-  let candidates = db.names ?? [];
+  const adjDb = await loadAdjectiveLists();
 
-  if (settings.race) candidates = candidates.filter(n => n.race === settings.race);
-  if (settings.region) {
-    const variance = settings.regionalVariance ?? 0;
-    if (variance > 0 && Math.random() * 100 < variance) {
-      // Skip region filter — pick from any region (race/gender still apply)
-    } else {
-      candidates = candidates.filter(n => n.region === settings.region);
-    }
+  // Uniqueness only makes sense when the name can actually vary. A name built purely
+  // from static text is intentionally fixed, so we don't chase uniqueness or warn.
+  const canVary = (settings.segments ?? []).some(s => s.type === "database" || s.type === "adjective");
+  const used = canVary ? usedSiblingNames(tokenDoc) : new Set();
+  const actorName = tokenDoc.baseActor?.name ?? actor.name;
+
+  let name = "";
+  let unique = true;
+  for (let attempt = 0; attempt < MAX_NAME_TRIES; attempt++) {
+    name = buildRandomName(settings, db, adjDb, actorName);
+    if (!name) break; // all segments resolved empty — nothing to place
+    unique = !used.has(name);
+    if (unique) break;
   }
-  if (settings.gender) candidates = candidates.filter(n => n.gender === settings.gender);
 
-  if (candidates.length === 0) {
-    console.warn(`${LOG} No names match the selected filters.`);
+  if (!name) {
+    console.warn(`${LOG} Name randomizer produced an empty name; leaving token name unchanged.`);
     return;
   }
 
-  const chosen = candidates[Math.floor(Math.random() * candidates.length)];
-  await tokenDoc.update({ name: chosen.name });
-  console.log(`${LOG} Randomized token name to: ${chosen.name}`);
+  await tokenDoc.update({ name });
+
+  if (!unique) {
+    const label = tokenDoc.baseActor?.name ?? actor.name;
+    ui.notifications?.warn(
+      `Token Randomizer: couldn't find a unique name for "${label}" after ${MAX_NAME_TRIES} tries — kept the duplicate "${name}".`
+    );
+    console.warn(`${LOG} Settled on duplicate name "${name}" for ${label} after ${MAX_NAME_TRIES} tries.`);
+  } else {
+    console.log(`${LOG} Randomized token name to: ${name}`);
+  }
 }
 
 async function randomizeTokenTreasure(tokenDoc) {
@@ -530,6 +835,9 @@ class TokenRandomizerSettings extends HandlebarsApplicationMixin(ApplicationV2) 
     this.draftAbilitySettings = null;
     this.draftNameSettings = null;
     this.draftTreasureSettings = null;
+    // UI-only collapse state for name components, tracked by segment index (kept in
+    // sync as segments are added/removed/reordered so it isn't written to settings).
+    this.collapsedSegments = new Set();
   }
 
   static DEFAULT_OPTIONS = {
@@ -544,7 +852,15 @@ class TokenRandomizerSettings extends HandlebarsApplicationMixin(ApplicationV2) 
       reset: TokenRandomizerSettings.#onReset,
       save: TokenRandomizerSettings.#onSave,
       cancel: TokenRandomizerSettings.#onCancel,
-      importData: TokenRandomizerSettings.#onImportData
+      addSegment: TokenRandomizerSettings.#onAddSegment,
+      removeSegment: TokenRandomizerSettings.#onRemoveSegment,
+      clearSegments: TokenRandomizerSettings.#onClearSegments,
+      toggleSegment: TokenRandomizerSettings.#onToggleSegment,
+      moveSegmentUp: TokenRandomizerSettings.#onMoveSegmentUp,
+      moveSegmentDown: TokenRandomizerSettings.#onMoveSegmentDown,
+      addFilter: TokenRandomizerSettings.#onAddFilter,
+      removeFilter: TokenRandomizerSettings.#onRemoveFilter,
+      rerollPreview: TokenRandomizerSettings.#onRerollPreview
     }
   };
 
@@ -600,23 +916,20 @@ class TokenRandomizerSettings extends HandlebarsApplicationMixin(ApplicationV2) 
       nil: this.draftAbilitySettings.constraints[key]?.nil ?? false
     }));
 
-    // Name database options
+    // Name builder options. Cache the loaded pools on the instance so the live
+    // preview can be regenerated on slider drags without re-querying/re-rendering.
+    if (!Array.isArray(this.draftNameSettings.segments)) this.draftNameSettings.segments = [];
     const db = await loadNameDatabase();
-    const races = getUniqueValues(db, "race");
-    const genders = getUniqueValues(db, "gender");
-
-    // Filter regions by selected race
-    const selectedRace = this.draftNameSettings.race;
-    let filteredDb = db;
-    if (selectedRace) {
-      filteredDb = { names: (db.names ?? []).filter(n => n.race === selectedRace) };
-    }
-    const regions = getUniqueValues(filteredDb, "region");
-
-    // Clear region if it's no longer valid for the selected race
-    if (this.draftNameSettings.region && !regions.includes(this.draftNameSettings.region)) {
-      this.draftNameSettings.region = "";
-    }
+    const adjDb = await loadAdjectiveLists();
+    this._nameDb = db;
+    this._adjDb = adjDb;
+    // Base-actor name for `actor` components; a placeholder in the defaults dialog.
+    this._actorName = this.actor?.name ?? "Actor";
+    const nameSegments = buildNameSegmentViewModels(this.draftNameSettings.segments, db, adjDb, this.collapsedSegments);
+    const namePreview = buildRandomName(this.draftNameSettings, db, adjDb, this._actorName);
+    const names = db.names ?? [];
+    const givenCount = names.filter(n => n.type === "given").length;
+    const surnameCount = names.filter(n => n.type === "surname").length;
 
     return {
       isDefaults: this.isDefaults,
@@ -629,15 +942,11 @@ class TokenRandomizerSettings extends HandlebarsApplicationMixin(ApplicationV2) 
       abilities,
       // Name tab
       nameEnabled: this.draftNameSettings.enabled,
-      nameRace: this.draftNameSettings.race,
-      nameRegion: this.draftNameSettings.region,
-      nameGender: this.draftNameSettings.gender,
-      nameRegionalVariance: this.draftNameSettings.regionalVariance ?? 0,
-      hasRegionSelected: !!this.draftNameSettings.region,
-      races,
-      regions,
-      genders,
-      nameCount: (db.names ?? []).length,
+      nameSegments,
+      namePreview,
+      nameCount: names.length,
+      givenCount,
+      surnameCount,
       // Treasure tab
       treasureEnabled: this.draftTreasureSettings.enabled,
       treasureGoldFormula: this.draftTreasureSettings.goldFormula ?? "",
@@ -701,27 +1010,57 @@ class TokenRandomizerSettings extends HandlebarsApplicationMixin(ApplicationV2) 
       this.render();
     });
 
-    // ── Name Tab ──
+    // ── Name Tab (segment builder) ──
+    const seg = (el) => this.draftNameSettings.segments[Number(el.dataset.segment)];
+    const clampWeight = (v) => Math.max(1, Math.min(10, parseInt(v) || DEFAULT_SEGMENT_WEIGHT));
+
     on(".name-enabled", "change", (e) => {
       this.draftNameSettings.enabled = e.currentTarget.checked;
       this.render();
     });
-    on(".name-race", "change", (e) => {
-      this.draftNameSettings.race = e.currentTarget.value;
+    on(".segment-nametype", "change", (e) => {
+      seg(e.currentTarget).nameType = e.currentTarget.value;
+      this._refreshPreview();
+    });
+    on(".segment-static-text", "change", (e) => {
+      seg(e.currentTarget).text = e.currentTarget.value;
+      this._refreshPreview();
+    });
+    on(".filter-race", "change", (e) => {
+      const f = seg(e.currentTarget).filters[Number(e.currentTarget.dataset.filter)];
+      f.race = e.currentTarget.value;
+      f.region = ""; // region choices depend on race — reset to Any
       this.render();
     });
-    on(".name-region", "change", (e) => {
-      this.draftNameSettings.region = e.currentTarget.value;
+    on(".filter-region", "change", (e) => {
+      seg(e.currentTarget).filters[Number(e.currentTarget.dataset.filter)].region = e.currentTarget.value;
+      this._refreshPreview();
+    });
+    on(".filter-gender", "change", (e) => {
+      seg(e.currentTarget).filters[Number(e.currentTarget.dataset.filter)].gender = e.currentTarget.value;
+      this._refreshPreview();
+    });
+    on(".filter-weight", "input", (e) => {
+      const val = clampWeight(e.currentTarget.value);
+      seg(e.currentTarget).filters[Number(e.currentTarget.dataset.filter)].weight = val;
+      this._updateWeightLabel(e.currentTarget, val);
+    });
+    on(".adj-enabled", "change", (e) => {
+      const s = seg(e.currentTarget);
+      const listName = e.currentTarget.dataset.list;
+      if (!Array.isArray(s.lists)) s.lists = [];
+      if (e.currentTarget.checked) {
+        if (!s.lists.some(l => l.list === listName)) s.lists.push({ list: listName, weight: DEFAULT_SEGMENT_WEIGHT });
+      } else {
+        s.lists = s.lists.filter(l => l.list !== listName);
+      }
       this.render();
     });
-    on(".name-regional-variance", "input", (e) => {
-      const value = parseInt(e.currentTarget.value) || 0;
-      this.draftNameSettings.regionalVariance = Math.max(0, Math.min(value, 100));
-      const label = html.querySelector(".regional-variance-value");
-      if (label) label.textContent = `${this.draftNameSettings.regionalVariance}%`;
-    });
-    on(".name-gender", "change", (e) => {
-      this.draftNameSettings.gender = e.currentTarget.value;
+    on(".adj-weight", "input", (e) => {
+      const val = clampWeight(e.currentTarget.value);
+      const entry = (seg(e.currentTarget).lists ?? []).find(l => l.list === e.currentTarget.dataset.list);
+      if (entry) entry.weight = val;
+      this._updateWeightLabel(e.currentTarget, val);
     });
 
     // ── Treasure Tab ──
@@ -755,7 +1094,121 @@ class TokenRandomizerSettings extends HandlebarsApplicationMixin(ApplicationV2) 
     });
   }
 
+  /** Regenerate the live name-preview sample in place (no full re-render). */
+  _refreshPreview() {
+    const el = this.element?.querySelector(".name-preview-value");
+    if (!el || !this._nameDb || !this._adjDb) return;
+    const name = buildRandomName(this.draftNameSettings, this._nameDb, this._adjDb, this._actorName);
+    // textContent (not innerHTML) since names come from user-supplied data.
+    if (name) el.textContent = name;
+    else el.innerHTML = "<em>(empty)</em>";
+  }
+
+  /** Update the numeric readout next to a weight slider and refresh the preview. */
+  _updateWeightLabel(rangeEl, val) {
+    const label = rangeEl.parentElement?.querySelector(".weight-value");
+    if (label) label.textContent = String(val);
+    this._refreshPreview();
+  }
+
   // ── Action handlers (data-action) ──
+
+  static #onAddSegment(event, target) {
+    const type = target.dataset.type;
+    let segment;
+    if (type === "database") {
+      segment = { type: "database", nameType: "given", filters: [{ race: "", region: "", gender: "", weight: DEFAULT_SEGMENT_WEIGHT }] };
+    } else if (type === "adjective") {
+      segment = { type: "adjective", lists: [] };
+    } else if (type === "actor") {
+      segment = { type: "actor" };
+    } else {
+      segment = { type: "static", text: "" };
+    }
+    this.draftNameSettings.segments.push(segment);
+    this.render();
+  }
+
+  static #onRemoveSegment(event, target) {
+    const i = Number(target.dataset.segment);
+    this.draftNameSettings.segments.splice(i, 1);
+    // Shift collapse indices above the removed one down by one.
+    const next = new Set();
+    for (const c of this.collapsedSegments) {
+      if (c < i) next.add(c);
+      else if (c > i) next.add(c - 1);
+    }
+    this.collapsedSegments = next;
+    this.render();
+  }
+
+  static async #onClearSegments(event, target) {
+    if (!this.draftNameSettings.segments.length) return;
+    const ok = await foundry.applications.api.DialogV2.confirm({
+      window: { title: "Clear Name Components" },
+      content: "<p>Remove all name components? Nothing is saved until you click Save, so you can still Cancel to undo.</p>"
+    });
+    if (!ok) return;
+    this.draftNameSettings.segments = [];
+    this.collapsedSegments.clear();
+    this.render();
+  }
+
+  static #onToggleSegment(event, target) {
+    const i = Number(target.dataset.segment);
+    if (this.collapsedSegments.has(i)) this.collapsedSegments.delete(i);
+    else this.collapsedSegments.add(i);
+    // Toggle in place (no re-render) so open editors and slider focus are preserved.
+    target.closest(".name-segment")?.classList.toggle("collapsed");
+  }
+
+  static #onMoveSegmentUp(event, target) {
+    const i = Number(target.dataset.segment);
+    const s = this.draftNameSettings.segments;
+    if (i > 0) {
+      [s[i - 1], s[i]] = [s[i], s[i - 1]];
+      this.#swapCollapsed(i - 1, i);
+      this.render();
+    }
+  }
+
+  static #onMoveSegmentDown(event, target) {
+    const i = Number(target.dataset.segment);
+    const s = this.draftNameSettings.segments;
+    if (i < s.length - 1) {
+      [s[i + 1], s[i]] = [s[i], s[i + 1]];
+      this.#swapCollapsed(i, i + 1);
+      this.render();
+    }
+  }
+
+  /** Swap the collapsed state of two segment indices (used when reordering). */
+  #swapCollapsed(a, b) {
+    const set = this.collapsedSegments;
+    const ha = set.has(a);
+    const hb = set.has(b);
+    set.delete(a);
+    set.delete(b);
+    if (hb) set.add(a);
+    if (ha) set.add(b);
+  }
+
+  static #onAddFilter(event, target) {
+    const s = this.draftNameSettings.segments[Number(target.dataset.segment)];
+    if (!Array.isArray(s.filters)) s.filters = [];
+    s.filters.push({ race: "", region: "", gender: "", weight: DEFAULT_SEGMENT_WEIGHT });
+    this.render();
+  }
+
+  static #onRemoveFilter(event, target) {
+    const s = this.draftNameSettings.segments[Number(target.dataset.segment)];
+    s.filters.splice(Number(target.dataset.filter), 1);
+    this.render();
+  }
+
+  static #onRerollPreview(event, target) {
+    this._refreshPreview();
+  }
 
   static #onSwitchTab(event, target) {
     this.activeTab = target.dataset.tab;
@@ -792,48 +1245,193 @@ class TokenRandomizerSettings extends HandlebarsApplicationMixin(ApplicationV2) 
   static #onCancel(event, target) {
     this.close();
   }
+}
 
-  static async #onImportData(event, target) {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".csv,.tsv,.txt,.json";
-    input.addEventListener("change", async (changeEvent) => {
-      const file = changeEvent.target.files[0];
-      if (!file) return;
-      try {
-        const parsed = await parseNameFile(file);
-        if (!parsed.length) {
-          ui.notifications?.warn("No usable name entries found in the file.");
-          return;
-        }
+// ─── List Manager (name database + adjective lists) ──────────────────────────────
 
-        // Merge into the existing USER database only. The shipped sample is never
-        // pulled in here — the first import seeds a clean, sample-free user pool.
-        const userNames = await loadUserNames();
-        const existing = new Set(userNames.map(nameKey));
-        let added = 0;
-        for (const entry of parsed) {
-          const key = nameKey(entry);
-          if (!existing.has(key)) {
-            userNames.push(entry);
-            existing.add(key);
-            added++;
-          }
-        }
+/** Open a file picker for the given accept filter and run `handler(file)` with error toasts. */
+function pickFile(accept, handler) {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = accept;
+  input.addEventListener("change", async (ev) => {
+    const file = ev.target.files[0];
+    if (!file) return;
+    try {
+      await handler(file);
+    } catch (err) {
+      console.error(`${LOG} File import error:`, err);
+      ui.notifications?.error(`Import failed: ${err.message}`);
+    }
+  });
+  input.click();
+}
 
-        await saveUserNames(userNames);
-        await loadNameDatabase(true); // refresh merged cache
-        ui.notifications?.info(
-          `Imported ${added} new names (${parsed.length - added} duplicates skipped). ` +
-          `Custom name pool: ${userNames.length}.`
-        );
-        this.render();
-      } catch (err) {
-        console.error(`${LOG} Import error:`, err);
-        ui.notifications?.error(`Failed to import names: ${err.message}`);
-      }
+/** Trigger a client-side download of text content (used for TSV export). */
+function downloadText(filename, text, mime = "text/plain") {
+  const blob = new Blob([text], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** Single-line text prompt via DialogV2. Resolves to the string, or null if cancelled. */
+async function promptForText(title, label, initial = "") {
+  const safe = foundry.utils.escapeHTML?.(initial) ?? initial;
+  return foundry.applications.api.DialogV2.prompt({
+    window: { title },
+    content: `<div class="form-group"><label>${label}</label><input type="text" name="entryValue" value="${safe}" autofocus /></div>`,
+    ok: { label: "OK", callback: (event, button) => button.form.elements.entryValue.value },
+    rejectClose: false
+  });
+}
+
+class TokenRandomizerListManager extends HandlebarsApplicationMixin(ApplicationV2) {
+  static DEFAULT_OPTIONS = {
+    classes: ["pf1-token-randomizer", "token-randomizer-lists"],
+    tag: "div",
+    window: { title: "Token Randomizer Lists", icon: "fas fa-list", resizable: true },
+    position: { width: 520, height: "auto" },
+    actions: {
+      importNames: TokenRandomizerListManager.#onImportNames,
+      exportNames: TokenRandomizerListManager.#onExportNames,
+      addAdjList: TokenRandomizerListManager.#onAddAdjList,
+      replaceAdjList: TokenRandomizerListManager.#onReplaceAdjList,
+      deleteAdjList: TokenRandomizerListManager.#onDeleteAdjList
+    }
+  };
+
+  static PARTS = {
+    body: { template: `modules/${MODULE_ID}/src/templates/list-manager.hbs` }
+  };
+
+  _initializeApplicationOptions(options) {
+    const applied = super._initializeApplicationOptions(options);
+    applied.uniqueId = "token-randomizer-lists";
+    return applied;
+  }
+
+  async _prepareContext(options) {
+    const db = await loadNameDatabase(true); // force so counts reflect recent imports
+    const names = db.names ?? [];
+    const adjDb = await loadAdjectiveLists(true);
+    const adjLists = Object.keys(adjDb.lists).sort().map(name => {
+      const source = adjDb.sources[name];
+      return {
+        name,
+        count: adjDb.lists[name].length,
+        source,
+        isBundled: source === "bundled",
+        isOverridden: source === "overridden",
+        isCustom: source === "custom"
+      };
     });
-    input.click();
+    return {
+      nameCount: names.length,
+      givenCount: names.filter(n => n.type === "given").length,
+      surnameCount: names.filter(n => n.type === "surname").length,
+      hasNames: names.length > 0,
+      adjLists,
+      hasAdjLists: adjLists.length > 0
+    };
+  }
+
+  // ── Name database ──
+
+  static #onImportNames(event, target) {
+    pickFile(".csv,.tsv,.txt,.json", async (file) => {
+      const parsed = await parseNameFile(file);
+      if (!parsed.length) {
+        ui.notifications?.warn("No usable name entries found in the file.");
+        return;
+      }
+      // Merge into the USER database only; the bundled sample is never pulled in here.
+      const userNames = await loadUserNames();
+      const existing = new Set(userNames.map(nameKey));
+      let added = 0;
+      for (const entry of parsed) {
+        const key = nameKey(entry);
+        if (!existing.has(key)) {
+          userNames.push(entry);
+          existing.add(key);
+          added++;
+        }
+      }
+      await saveUserNames(userNames);
+      await loadNameDatabase(true);
+      ui.notifications?.info(
+        `Imported ${added} new names (${parsed.length - added} duplicates skipped). ` +
+        `Custom name pool: ${userNames.length}.`
+      );
+      this.render();
+    });
+  }
+
+  static async #onExportNames(event, target) {
+    const db = await loadNameDatabase(true);
+    const names = db.names ?? [];
+    if (!names.length) {
+      ui.notifications?.warn("The name database is empty — nothing to export.");
+      return;
+    }
+    downloadText(`${MODULE_ID}-names.tsv`, namesToTSV(names), "text/tab-separated-values");
+  }
+
+  // ── Adjective lists ──
+
+  static async #onAddAdjList(event, target) {
+    const raw = await promptForText("New Adjective List", "List name:", "");
+    if (raw === null) return;
+    const name = raw.trim();
+    if (!name) {
+      ui.notifications?.warn("A list name is required.");
+      return;
+    }
+    pickFile(".txt,.csv,.json", async (file) => {
+      const words = await parseAdjectiveFile(file);
+      const user = await loadUserAdjectives();
+      user[name] = words;
+      await saveUserAdjectives(user);
+      await loadAdjectiveLists(true);
+      ui.notifications?.info(`Adjective list "${name}" saved (${words.length} words).`);
+      this.render();
+    });
+  }
+
+  static #onReplaceAdjList(event, target) {
+    const name = target.dataset.list;
+    pickFile(".txt,.csv,.json", async (file) => {
+      const words = await parseAdjectiveFile(file);
+      const user = await loadUserAdjectives();
+      user[name] = words;
+      await saveUserAdjectives(user);
+      await loadAdjectiveLists(true);
+      ui.notifications?.info(`Adjective list "${name}" replaced (${words.length} words).`);
+      this.render();
+    });
+  }
+
+  static async #onDeleteAdjList(event, target) {
+    const name = target.dataset.list;
+    const adjDb = await loadAdjectiveLists();
+    const revert = adjDb.sources[name] === "overridden";
+    const safe = foundry.utils.escapeHTML?.(name) ?? name;
+    const confirmed = await foundry.applications.api.DialogV2.confirm({
+      window: { title: revert ? "Revert Adjective List" : "Delete Adjective List" },
+      content: revert
+        ? `<p>Revert "<strong>${safe}</strong>" to the bundled default? Your uploaded version will be removed.</p>`
+        : `<p>Delete the custom list "<strong>${safe}</strong>"? This cannot be undone.</p>`
+    });
+    if (!confirmed) return;
+    const user = await loadUserAdjectives();
+    delete user[name];
+    await saveUserAdjectives(user);
+    await loadAdjectiveLists(true);
+    ui.notifications?.info(revert ? `"${name}" reverted to the bundled default.` : `"${name}" deleted.`);
+    this.render();
   }
 }
 
@@ -944,10 +1542,7 @@ Hooks.once("init", () => {
     type: Object,
     default: {
       enabled: false,
-      race: "",
-      region: "",
-      gender: "",
-      regionalVariance: 0
+      segments: []
     }
   });
 
@@ -973,11 +1568,21 @@ Hooks.once("init", () => {
   game.settings.registerMenu(MODULE_ID, "randomizer-defaults-menu", {
     name: "Token Randomizer Defaults",
     label: "Configure Defaults",
-    hint: "Set the default randomizer settings applied to new actors, and manage the name database.",
+    hint: "Set the default randomizer settings applied to new actors.",
     icon: "fas fa-dice",
     type: TokenRandomizerSettings,
+    restricted: true
+  });
+
+  game.settings.registerMenu(MODULE_ID, "randomizer-lists-menu", {
+    name: "Token Randomizer Lists",
+    label: "Manage Lists",
+    hint: "Import/export the name database and manage adjective lists used by the name builder.",
+    icon: "fas fa-list",
+    type: TokenRandomizerListManager,
     restricted: true
   });
 });
 
 window.TokenRandomizerSettings = TokenRandomizerSettings;
+window.TokenRandomizerListManager = TokenRandomizerListManager;

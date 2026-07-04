@@ -81,63 +81,135 @@
           <span>Enable Name Randomization</span>
         </label>
       </div>
-      <p class="hint">When enabled, the token name will be randomly selected from the name database when an unlinked token is placed.</p>
+      <p class="hint">When enabled, the token name is assembled from the components below when an unlinked token is placed.</p>
     </div>
 
-    <div class="settings-section name-filters-section {{#unless nameEnabled}}disabled{{/unless}}">
-      <h3>Name Filters</h3>
-      <p class="hint">Filter the name pool by race, region, and/or gender. Leave blank to include all.</p>
+    <div class="settings-section name-builder-section {{#unless nameEnabled}}disabled{{/unless}}">
+      <h3>Name Builder</h3>
+      <p class="hint">The name is built by joining each component, left to right, with spaces. Components resolving to nothing are skipped.</p>
 
-      <div class="filter-row">
-        <label>Race</label>
-        <select class="name-race" {{#unless nameEnabled}}disabled{{/unless}}>
-          <option value="">Any</option>
-          {{#each races}}
-          <option value="{{this}}" {{#if (eq this ../nameRace)}}selected{{/if}}>{{this}}</option>
-          {{/each}}
-        </select>
+      {{!-- Live preview --}}
+      <div class="name-preview-row">
+        <span class="name-preview-label">Sample:</span>
+        <span class="name-preview-value">{{#if namePreview}}{{namePreview}}{{else}}<em>(empty)</em>{{/if}}</span>
+        <button type="button" class="name-preview-reroll" data-action="rerollPreview" title="Reroll sample">
+          <i class="fas fa-dice"></i>
+        </button>
       </div>
 
-      <div class="filter-row">
-        <label>Region</label>
-        <select class="name-region" {{#unless nameEnabled}}disabled{{/unless}}>
-          <option value="">Any</option>
-          {{#each regions}}
-          <option value="{{this}}" {{#if (eq this ../nameRegion)}}selected{{/if}}>{{this}}</option>
-          {{/each}}
-        </select>
-      </div>
-
-      {{#if hasRegionSelected}}
-      <div class="filter-row variance-row {{#unless nameEnabled}}disabled{{/unless}}">
-        <label>Regional Variance</label>
-        <div class="slider-group">
-          <input type="range" class="name-regional-variance" min="0" max="100" value="{{nameRegionalVariance}}" {{#unless nameEnabled}}disabled{{/unless}} />
-          <span class="regional-variance-value">{{nameRegionalVariance}}%</span>
+      {{!-- Name components (ordered, collapsible) --}}
+      <div class="name-components-box">
+        <div class="components-box-header">
+          <span class="components-box-title">Name Components</span>
+          {{#if nameSegments.length}}
+          <button type="button" class="components-clear-btn" data-action="clearSegments" title="Remove all components">
+            <i class="fas fa-trash"></i> Clear
+          </button>
+          {{/if}}
         </div>
-      </div>
-      <p class="hint variance-hint">Percentage of names drawn from any region instead of the selected one. Race and gender filters still apply.</p>
-      {{/if}}
+        <div class="name-segments">
+        {{#each nameSegments}}
+        <div class="name-segment {{#if collapsed}}collapsed{{/if}} {{#if isActor}}no-body{{/if}}">
+          <div class="segment-header" {{#unless isActor}}data-action="toggleSegment" data-segment="{{index}}" title="Click to collapse / expand"{{/unless}}>
+            <span class="segment-title">
+              {{#unless isActor}}<i class="fas fa-chevron-down segment-collapse-indicator"></i>{{/unless}}
+              {{#if isDatabase}}<i class="fas fa-signature"></i> Roster Name{{/if}}
+              {{#if isAdjective}}<i class="fas fa-tags"></i> Adjective{{/if}}
+              {{#if isStatic}}<i class="fas fa-font"></i> Static Text{{/if}}
+              {{#if isActor}}<i class="fas fa-user"></i> Actor Name{{/if}}
+            </span>
+            <div class="segment-controls">
+              <button type="button" class="segment-btn" data-action="moveSegmentUp" data-segment="{{index}}" title="Move up" {{#if isFirst}}disabled{{/if}}><i class="fas fa-chevron-up"></i></button>
+              <button type="button" class="segment-btn" data-action="moveSegmentDown" data-segment="{{index}}" title="Move down" {{#if isLast}}disabled{{/if}}><i class="fas fa-chevron-down"></i></button>
+              <button type="button" class="segment-btn segment-btn-danger" data-action="removeSegment" data-segment="{{index}}" title="Remove segment"><i class="fas fa-trash"></i></button>
+            </div>
+          </div>
+          {{#unless isActor}}
+          <div class="segment-body">
 
-      <div class="filter-row">
-        <label>Gender</label>
-        <select class="name-gender" {{#unless nameEnabled}}disabled{{/unless}}>
-          <option value="">Any</option>
-          {{#each genders}}
-          <option value="{{this}}" {{#if (eq this ../nameGender)}}selected{{/if}}>{{this}}</option>
-          {{/each}}
-        </select>
+            {{#if isDatabase}}
+            <div class="segment-field">
+              <label>Name type</label>
+              <select class="segment-nametype" data-segment="{{index}}">
+                {{#each nameTypeOptions}}<option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}
+              </select>
+            </div>
+            <div class="filter-list">
+              <div class="filter-list-header">
+                <span>Race</span><span>Region</span><span>Gender</span><span>Weight</span><span></span>
+              </div>
+              {{#each filters}}
+              <div class="filter-entry">
+                <select class="filter-race" data-segment="{{../index}}" data-filter="{{index}}">
+                  {{#each raceOptions}}<option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}
+                </select>
+                <select class="filter-region" data-segment="{{../index}}" data-filter="{{index}}">
+                  {{#each regionOptions}}<option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}
+                </select>
+                <select class="filter-gender" data-segment="{{../index}}" data-filter="{{index}}">
+                  {{#each genderOptions}}<option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}
+                </select>
+                <div class="weight-group">
+                  <input type="range" class="filter-weight" data-segment="{{../index}}" data-filter="{{index}}" min="1" max="10" value="{{weight}}" />
+                  <span class="weight-value">{{weight}}</span>
+                </div>
+                <button type="button" class="filter-delete" data-action="removeFilter" data-segment="{{../index}}" data-filter="{{index}}" title="Remove filter"><i class="fas fa-times"></i></button>
+              </div>
+              {{/each}}
+              <button type="button" class="filter-add" data-action="addFilter" data-segment="{{index}}"><i class="fas fa-plus"></i> Add filter</button>
+            </div>
+            {{/if}}
+
+            {{#if isAdjective}}
+            {{#if noLists}}
+            <p class="hint">No adjective lists are defined. Add lists from <strong>Game Settings → Token Randomizer Lists</strong>.</p>
+            {{else}}
+            <p class="hint">Check the lists to draw from and set each one's weight. A list is picked by weight, then a random word from it.</p>
+            <div class="adj-list">
+              {{#each lists}}
+              <div class="adj-entry {{#unless enabled}}disabled-weight{{/unless}}">
+                <label class="adj-toggle">
+                  <input type="checkbox" class="adj-enabled" data-segment="{{../index}}" data-list="{{name}}" {{#if enabled}}checked{{/if}} />
+                  <span>{{name}}</span>
+                </label>
+                <div class="weight-group">
+                  <input type="range" class="adj-weight" data-segment="{{../index}}" data-list="{{name}}" min="1" max="10" value="{{weight}}" {{#unless enabled}}disabled{{/unless}} />
+                  <span class="weight-value">{{weight}}</span>
+                </div>
+              </div>
+              {{/each}}
+            </div>
+            {{/if}}
+            {{/if}}
+
+            {{#if isStatic}}
+            <div class="segment-field">
+              <label>Text</label>
+              <input type="text" class="segment-static-text" data-segment="{{index}}" value="{{text}}" placeholder="e.g. the Bold" />
+            </div>
+            {{/if}}
+
+          </div>
+          {{/unless}}
+        </div>
+        {{else}}
+        <p class="hint no-segments-hint">No components yet — add one below to start building the name.</p>
+        {{/each}}
+        </div>
+
+        {{!-- Add a component (type chosen at add-time) --}}
+        <div class="segment-add-row">
+          <span class="segment-add-label">Add component:</span>
+          <button type="button" class="segment-add-btn" data-action="addSegment" data-type="database"><strong class="add-plus">+</strong> <i class="fas fa-signature"></i> Roster Name</button>
+          <button type="button" class="segment-add-btn" data-action="addSegment" data-type="adjective"><strong class="add-plus">+</strong> <i class="fas fa-tags"></i> Adjective</button>
+          <button type="button" class="segment-add-btn" data-action="addSegment" data-type="actor"><strong class="add-plus">+</strong> <i class="fas fa-user"></i> Actor Name</button>
+          <button type="button" class="segment-add-btn" data-action="addSegment" data-type="static"><strong class="add-plus">+</strong> <i class="fas fa-font"></i> Static</button>
+        </div>
       </div>
     </div>
 
     <div class="settings-section name-database-section">
-      <p class="hint">{{nameCount}} names loaded in the name database.</p>
-      {{#if isDefaults}}
-      <p class="hint">Import a CSV/TSV file (columns: name, race, region, gender) or a JSON file (<code>{ "names": [...] }</code>). Imported names are saved to this world and replace the bundled sample.</p>
-      <button type="button" class="import-csv-btn" data-action="importData">
-        <i class="fas fa-file-import"></i> Import Names
-      </button>
-      {{/if}}
+      <p class="hint">{{nameCount}} names loaded ({{givenCount}} given, {{surnameCount}} surname). Manage the name database and adjective lists in <strong>Game Settings → Token Randomizer Lists</strong>.</p>
     </div>
   </div>
   {{/if}}

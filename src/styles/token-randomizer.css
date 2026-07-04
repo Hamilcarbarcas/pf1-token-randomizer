@@ -97,6 +97,54 @@
   font-weight: bold;
 }
 
+/* Checkboxes in the randomizer menus are native inputs whose empty-box color is drawn
+   by the theme/browser, so it can't be recolored piecemeal. Take over their rendering
+   app-wide (appearance: none) for a consistent, high-contrast look: a solid black box
+   while unchecked, and an amber box with a checkmark when checked. The fixed square
+   size also stops them stretching tall/wide inside flex labels. */
+.pf1-token-randomizer input[type="checkbox"] {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  min-height: 20px;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  border: 1px solid #000 !important;
+  border-radius: 3px;
+  background: #000 !important;
+  outline: none;
+  cursor: pointer;
+  position: relative;
+  vertical-align: middle;
+}
+
+.pf1-token-randomizer input[type="checkbox"]:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.pf1-token-randomizer input[type="checkbox"]:checked {
+  background: var(--tr-accent) !important;
+  border-color: var(--tr-accent) !important;
+}
+
+/* Border-drawn checkmark (no Font Awesome dependency). */
+.pf1-token-randomizer input[type="checkbox"]:checked::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  width: 5px;
+  height: 10px;
+  border: solid #1a1a1a;
+  border-width: 0 2.5px 2.5px 0;
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
 .pf1-token-randomizer .setting-row label {
   display: flex;
   align-items: center;
@@ -190,65 +238,479 @@
   opacity: 0.4;
 }
 
-/* ── Name Tab ── */
-.pf1-token-randomizer .filter-row {
+/* ── Name Tab (segment builder) ── */
+.pf1-token-randomizer .name-preview-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  background: rgba(232, 166, 62, 0.08);
+  border: 1px solid rgba(232, 166, 62, 0.25);
+  border-radius: 4px;
+}
+
+.pf1-token-randomizer .name-preview-label {
+  font-weight: 600;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.pf1-token-randomizer .name-preview-value {
+  flex: 1;
+  font-weight: 600;
+  color: #fff;
+}
+
+.pf1-token-randomizer .name-preview-value em {
+  color: rgba(255, 255, 255, 0.4);
+  font-weight: 400;
+}
+
+.pf1-token-randomizer .name-preview-reroll {
+  width: auto;
+  padding: 4px 9px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.pf1-token-randomizer .name-preview-reroll:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+
+/* Framed "Name Components" box */
+.pf1-token-randomizer .name-components-box {
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.12);
+  margin-bottom: 10px;
+}
+
+.pf1-token-randomizer .components-box-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 5px 5px 0 0;
+}
+
+.pf1-token-randomizer .components-box-title {
+  font-weight: 700;
+  font-size: 16px;
+  text-align: center;
+  color: var(--tr-accent);
+}
+
+.pf1-token-randomizer .components-clear-btn {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: auto;
+  padding: 3px 9px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.pf1-token-randomizer .components-clear-btn:hover {
+  background: rgba(200, 60, 60, 0.35);
+  color: #fff;
+}
+
+.pf1-token-randomizer .name-segments {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+}
+
+.pf1-token-randomizer .name-segment {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.03);
+  overflow: hidden;
+}
+
+.pf1-token-randomizer .segment-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  user-select: none;
+}
+
+.pf1-token-randomizer .name-segment.collapsed .segment-header {
+  border-bottom: none;
+}
+
+/* Actor-name components have no settings, so their header is static (not collapsible). */
+.pf1-token-randomizer .name-segment.no-body .segment-header {
+  border-bottom: none;
+  cursor: default;
+}
+
+.pf1-token-randomizer .name-segment.collapsed .segment-body {
+  display: none;
+}
+
+.pf1-token-randomizer .segment-title {
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.pf1-token-randomizer .segment-title i {
+  color: var(--tr-accent);
+  margin-right: 4px;
+}
+
+.pf1-token-randomizer .segment-collapse-indicator {
+  color: rgba(255, 255, 255, 0.45) !important;
+  font-size: 11px;
+  transition: transform 0.15s;
+}
+
+.pf1-token-randomizer .name-segment.collapsed .segment-collapse-indicator {
+  transform: rotate(-90deg);
+}
+
+.pf1-token-randomizer .segment-controls {
+  display: flex;
+  gap: 4px;
+}
+
+.pf1-token-randomizer .segment-btn {
+  width: 24px;
+  height: 22px;
+  padding: 0;
+  line-height: 1;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.pf1-token-randomizer .segment-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+.pf1-token-randomizer .segment-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.pf1-token-randomizer .segment-btn-danger:hover:not(:disabled) {
+  background: rgba(200, 60, 60, 0.35);
+  color: #fff;
+}
+
+.pf1-token-randomizer .segment-body {
+  padding: 8px;
+}
+
+.pf1-token-randomizer .segment-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 8px;
 }
 
-.pf1-token-randomizer .filter-row label {
-  width: 60px;
+.pf1-token-randomizer .segment-field > label {
+  width: 72px;
   font-weight: 500;
   flex-shrink: 0;
 }
 
-.pf1-token-randomizer .filter-row select {
+.pf1-token-randomizer .segment-field > select,
+.pf1-token-randomizer .segment-field > input[type="text"] {
   flex: 1;
 }
 
-.pf1-token-randomizer .slider-group {
-  flex: 1;
-  display: flex;
+/* Database filter rows */
+.pf1-token-randomizer .filter-list-header,
+.pf1-token-randomizer .filter-entry {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 96px 24px;
+  gap: 6px;
   align-items: center;
-  gap: 8px;
 }
 
-.pf1-token-randomizer .slider-group input[type="range"] {
-  flex: 1;
+.pf1-token-randomizer .filter-list-header {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.5);
+  padding: 0 2px 4px;
+}
+
+.pf1-token-randomizer .filter-entry {
+  margin-bottom: 6px;
+}
+
+.pf1-token-randomizer .filter-entry select {
+  width: 100%;
+  min-width: 0;
+}
+
+.pf1-token-randomizer .filter-delete {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
   cursor: pointer;
 }
 
-.pf1-token-randomizer .regional-variance-value {
-  min-width: 36px;
-  text-align: right;
-  font-weight: 500;
+.pf1-token-randomizer .filter-delete:hover {
+  background: rgba(200, 60, 60, 0.35);
+  color: #fff;
+}
+
+.pf1-token-randomizer .filter-add,
+.pf1-token-randomizer .segment-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: auto;
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 4px;
+  cursor: pointer;
   font-size: 12px;
+  transition: background 0.15s, color 0.15s;
 }
 
-.pf1-token-randomizer .variance-hint {
-  margin-top: -4px;
+.pf1-token-randomizer .filter-add:hover,
+.pf1-token-randomizer .segment-add-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
 }
 
-.pf1-token-randomizer .import-csv-btn {
+.pf1-token-randomizer .filter-add {
+  margin-top: 2px;
+}
+
+/* Weight slider */
+.pf1-token-randomizer .weight-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pf1-token-randomizer .weight-group input[type="range"] {
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.pf1-token-randomizer .weight-value {
+  min-width: 16px;
+  text-align: right;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Adjective toggles */
+.pf1-token-randomizer .adj-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pf1-token-randomizer .adj-entry {
+  display: grid;
+  grid-template-columns: 1fr 120px;
+  gap: 8px;
+  align-items: center;
+  padding: 3px 4px;
+  border-radius: 3px;
+}
+
+.pf1-token-randomizer .adj-entry:nth-child(odd) {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.pf1-token-randomizer .adj-entry.disabled-weight .weight-group {
+  opacity: 0.4;
+}
+
+.pf1-token-randomizer .adj-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+/* Add-component row (footer of the components box) */
+.pf1-token-randomizer .segment-add-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.pf1-token-randomizer .segment-add-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.pf1-token-randomizer .segment-add-btn .add-plus {
+  font-weight: 900;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--tr-accent);
+}
+
+.pf1-token-randomizer .no-segments-hint {
+  text-align: center;
+  padding: 12px;
+  margin: 0;
+}
+
+/* ── List Manager ── */
+.pf1-token-randomizer .token-randomizer-lists {
+  padding: 8px;
+  font-family: var(--font-primary, "Signika", sans-serif);
+}
+
+.pf1-token-randomizer .token-randomizer-lists code {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+.pf1-token-randomizer .list-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.pf1-token-randomizer .list-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 14px;
+  width: auto;
+  padding: 6px 12px;
   background: rgba(255, 255, 255, 0.08);
   color: rgba(255, 255, 255, 0.85);
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 4px;
   cursor: pointer;
   font-size: 12px;
-  width: auto;
   transition: background 0.15s, color 0.15s;
 }
 
-.pf1-token-randomizer .import-csv-btn:hover {
-  background: rgba(255, 255, 255, 0.14);
+.pf1-token-randomizer .list-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.15);
   color: #fff;
+}
+
+.pf1-token-randomizer .list-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.pf1-token-randomizer .list-btn.small {
+  padding: 3px 8px;
+  font-size: 11px;
+}
+
+.pf1-token-randomizer .list-btn-danger:hover:not(:disabled) {
+  background: rgba(200, 60, 60, 0.35);
+}
+
+.pf1-token-randomizer .adj-manage-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 4px;
+}
+
+.pf1-token-randomizer .adj-manage-header,
+.pf1-token-randomizer .adj-manage-row {
+  display: grid;
+  grid-template-columns: 1fr 56px 90px auto;
+  gap: 8px;
+  align-items: center;
+  padding: 4px 6px;
+}
+
+.pf1-token-randomizer .adj-manage-header {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+}
+
+.pf1-token-randomizer .adj-manage-row:nth-child(even) {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.pf1-token-randomizer .adj-manage-row .col-name {
+  font-weight: 500;
+}
+
+.pf1-token-randomizer .adj-manage-row .col-count {
+  text-align: center;
+}
+
+.pf1-token-randomizer .adj-manage-row .col-actions {
+  display: flex;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+.pf1-token-randomizer .src-tag {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+.pf1-token-randomizer .src-bundled {
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.pf1-token-randomizer .src-overridden {
+  background: rgba(232, 166, 62, 0.25);
+  color: #f0c070;
+}
+
+.pf1-token-randomizer .src-custom {
+  background: rgba(90, 160, 90, 0.25);
+  color: #8fd08f;
 }
 
 /* ── Treasure Tab ── */
