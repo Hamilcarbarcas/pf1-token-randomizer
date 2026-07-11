@@ -27,6 +27,13 @@
   "styles": [
     "src/styles/token-randomizer.css"
   ],
+  "languages": [
+    {
+      "lang": "en",
+      "name": "English",
+      "path": "lang/en.json"
+    }
+  ],
   "url": "https://github.com/Hamilcarbarcas/pf1-token-randomizer",
   "readme": "https://github.com/Hamilcarbarcas/pf1-token-randomizer/blob/main/README.md",
   "bugs": "https://github.com/Hamilcarbarcas/pf1-token-randomizer/issues",

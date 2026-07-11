@@ -2,42 +2,36 @@
 
   {{!-- ═══════════ Name Database ═══════════ --}}
   <div class="settings-section">
-    <h3><i class="fas fa-signature"></i> Name Database</h3>
+    <h3><i class="fas fa-signature"></i> {{localize "TR.Lists.NameDatabase"}}</h3>
     <p class="hint">
-      {{nameCount}} names loaded ({{givenCount}} given, {{surnameCount}} surname).
-      Your custom database is stored in the world folder and replaces the bundled sample once you import.
+      {{localize "TR.Lists.NameDbInfo" count=nameCount given=givenCount surname=surnameCount}}
     </p>
     <p class="hint">
-      Import <strong>CSV / TSV / TXT</strong> (header row with a <code>name</code> column; optional
-      <code>type</code> (given/surname), <code>race</code>, <code>region</code>, <code>gender</code>) or
-      <strong>JSON</strong> (<code>{ "names": [...] }</code>). A missing <code>type</code> is treated as
-      <em>given</em>. Imports merge; exact duplicates are skipped.
+      {{{localize "TR.Lists.ImportHint"}}}
     </p>
     <div class="list-actions">
       <button type="button" class="list-btn" data-action="importNames">
-        <i class="fas fa-file-import"></i> Import Names
+        <i class="fas fa-file-import"></i> {{localize "TR.Lists.ImportNames"}}
       </button>
       <button type="button" class="list-btn" data-action="exportNames" {{#unless hasNames}}disabled{{/unless}}>
-        <i class="fas fa-file-export"></i> Export as TSV
+        <i class="fas fa-file-export"></i> {{localize "TR.Lists.ExportTsv"}}
       </button>
     </div>
   </div>
 
   {{!-- ═══════════ Adjective Lists ═══════════ --}}
   <div class="settings-section">
-    <h3><i class="fas fa-tags"></i> Adjective Lists</h3>
+    <h3><i class="fas fa-tags"></i> {{localize "TR.Lists.AdjectiveLists"}}</h3>
     <p class="hint">
-      Single-column word lists used by <em>Adjective</em> name segments. Bundled lists ship with the module;
-      uploading a list with the same name overrides it, and any other name adds a new list. Upload a
-      <strong>TXT</strong> (one word per line), <strong>CSV</strong>, or <strong>JSON</strong> array.
+      {{{localize "TR.Lists.AdjHint"}}}
     </p>
 
     {{#if hasAdjLists}}
     <div class="adj-manage-list">
       <div class="adj-manage-header">
-        <span class="col-name">List</span>
-        <span class="col-count">Words</span>
-        <span class="col-source">Source</span>
+        <span class="col-name">{{localize "TR.Lists.ColList"}}</span>
+        <span class="col-count">{{localize "TR.Lists.ColWords"}}</span>
+        <span class="col-source">{{localize "TR.Lists.ColSource"}}</span>
         <span class="col-actions"></span>
       </div>
       {{#each adjLists}}
@@ -45,22 +39,22 @@
         <span class="col-name">{{name}}</span>
         <span class="col-count">{{count}}</span>
         <span class="col-source">
-          {{#if isBundled}}<span class="src-tag src-bundled">Bundled</span>{{/if}}
-          {{#if isOverridden}}<span class="src-tag src-overridden">Overridden</span>{{/if}}
-          {{#if isCustom}}<span class="src-tag src-custom">Custom</span>{{/if}}
+          {{#if isBundled}}<span class="src-tag src-bundled">{{localize "TR.Lists.SrcBundled"}}</span>{{/if}}
+          {{#if isOverridden}}<span class="src-tag src-overridden">{{localize "TR.Lists.SrcOverridden"}}</span>{{/if}}
+          {{#if isCustom}}<span class="src-tag src-custom">{{localize "TR.Lists.SrcCustom"}}</span>{{/if}}
         </span>
         <span class="col-actions">
-          <button type="button" class="list-btn small" data-action="replaceAdjList" data-list="{{name}}" title="Upload a replacement list">
-            <i class="fas fa-upload"></i> Replace
+          <button type="button" class="list-btn small" data-action="replaceAdjList" data-list="{{name}}" title="{{localize "TR.Lists.ReplaceTitle"}}">
+            <i class="fas fa-upload"></i> {{localize "TR.Lists.Replace"}}
           </button>
           {{#if isOverridden}}
-          <button type="button" class="list-btn small" data-action="deleteAdjList" data-list="{{name}}" title="Revert to the bundled default">
-            <i class="fas fa-undo"></i> Revert
+          <button type="button" class="list-btn small" data-action="deleteAdjList" data-list="{{name}}" title="{{localize "TR.Lists.RevertTitle"}}">
+            <i class="fas fa-undo"></i> {{localize "TR.Lists.Revert"}}
           </button>
           {{/if}}
           {{#if isCustom}}
-          <button type="button" class="list-btn small list-btn-danger" data-action="deleteAdjList" data-list="{{name}}" title="Delete this custom list">
-            <i class="fas fa-trash"></i> Delete
+          <button type="button" class="list-btn small list-btn-danger" data-action="deleteAdjList" data-list="{{name}}" title="{{localize "TR.Lists.DeleteTitle"}}">
+            <i class="fas fa-trash"></i> {{localize "TR.Lists.Delete"}}
           </button>
           {{/if}}
         </span>
@@ -68,12 +62,12 @@
       {{/each}}
     </div>
     {{else}}
-    <p class="hint">No adjective lists are defined.</p>
+    <p class="hint">{{localize "TR.Lists.NoAdjLists"}}</p>
     {{/if}}
 
     <div class="list-actions">
       <button type="button" class="list-btn" data-action="addAdjList">
-        <i class="fas fa-plus"></i> Add List
+        <i class="fas fa-plus"></i> {{localize "TR.Lists.AddList"}}
       </button>
     </div>
   </div>

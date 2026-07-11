@@ -9,28 +9,31 @@ const MODULE_ID = "pf1-token-randomizer";
 const LOG = "PF1 Token Randomizer |";
 
 const ABILITY_KEYS = ["str", "dex", "con", "int", "wis", "cha"];
+// Values are i18n keys, resolved via game.i18n.localize() at use time.
 const ABILITY_NAMES = {
-  str: "Strength",
-  dex: "Dexterity",
-  con: "Constitution",
-  int: "Intelligence",
-  wis: "Wisdom",
-  cha: "Charisma"
+  str: "TR.Ability.str",
+  dex: "TR.Ability.dex",
+  con: "TR.Ability.con",
+  int: "TR.Ability.int",
+  wis: "TR.Ability.wis",
+  cha: "TR.Ability.cha"
 };
 
 // ─── Treasure / Currency ────────────────────────────────────────────────────────
 const COIN_KEYS = ["pp", "gp", "sp", "cp"];
-const COIN_NAMES = { pp: "Platinum", gp: "Gold", sp: "Silver", cp: "Copper" };
+// Values are i18n keys, resolved via game.i18n.localize() at use time.
+const COIN_NAMES = { pp: "TR.Coin.pp", gp: "TR.Coin.gp", sp: "TR.Coin.sp", cp: "TR.Coin.cp" };
 // Value of one coin of each type, expressed in gold pieces.
 const COIN_GP_VALUE = { pp: 10, gp: 1, sp: 0.1, cp: 0.01 };
 
+// Built-in `label` values are i18n keys; getAllStatMethods() localizes them at use time.
 const STAT_METHODS = {
-  "standard": { label: "Standard Array (13,12,11,10,9,8)", values: [13, 12, 11, 10, 9, 8] },
-  "elite": { label: "Elite Array (15,14,13,12,11,8)", values: [15, 14, 13, 12, 11, 8] },
-  "champion": { label: "Champion Array (18,17,14,13,10,9)", values: [18, 17, 14, 13, 10, 9] },
-  "random-low": { label: "Random Low (3d6)", roll: () => rollDice(3, 6) },
-  "random-high": { label: "Random High (4d6 drop lowest)", roll: () => rollDice(4, 6, 1) },
-  "random-extreme": { label: "Random Extreme (4d6 drop lowest, lowest → 18)", roll: () => rollDice(4, 6, 1), postProcess: boostLowestTo18 }
+  "standard": { label: "TR.StatMethod.Standard", values: [13, 12, 11, 10, 9, 8] },
+  "elite": { label: "TR.StatMethod.Elite", values: [15, 14, 13, 12, 11, 8] },
+  "champion": { label: "TR.StatMethod.Champion", values: [18, 17, 14, 13, 10, 9] },
+  "random-low": { label: "TR.StatMethod.RandomLow", roll: () => rollDice(3, 6) },
+  "random-high": { label: "TR.StatMethod.RandomHigh", roll: () => rollDice(4, 6, 1) },
+  "random-extreme": { label: "TR.StatMethod.RandomExtreme", roll: () => rollDice(4, 6, 1), postProcess: boostLowestTo18 }
 };
 
 // ─── Custom Stat Methods (user-defined arrays & formulas) ───────────────────────
@@ -54,7 +57,11 @@ function getCustomStatMethods() {
  * style, appending the values/formula in parentheses.
  */
 function getAllStatMethods() {
-  const all = { ...STAT_METHODS };
+  const all = {};
+  // Localize built-in labels (stored as i18n keys) as they are copied in.
+  for (const [key, config] of Object.entries(STAT_METHODS)) {
+    all[key] = { ...config, label: game.i18n.localize(config.label) };
+  }
   for (const m of getCustomStatMethods()) {
     if (!m?.id) continue;
     if (m.type === "formula") {
@@ -175,7 +182,7 @@ function getUniqueValues(db, field) {
 }
 
 /** Build a <select> option model with a leading "Any" (empty value) choice. */
-function selectOptions(values, selected, anyLabel = "Any") {
+function selectOptions(values, selected, anyLabel = game.i18n.localize("TR.Any")) {
   const opts = [{ value: "", label: anyLabel, selected: !selected }];
   for (const v of values) opts.push({ value: v, label: v, selected: v === selected });
   return opts;
@@ -202,9 +209,9 @@ function buildNameSegmentViewModels(segments, db, adjDb, collapsed) {
       vm.isDatabase = true;
       const nameType = seg.nameType ?? "given";
       vm.nameTypeOptions = [
-        { value: "given", label: "Given name", selected: nameType === "given" },
-        { value: "surname", label: "Surname", selected: nameType === "surname" },
-        { value: "both", label: "Given + Surname", selected: nameType === "both" }
+        { value: "given", label: game.i18n.localize("TR.NameType.Given"), selected: nameType === "given" },
+        { value: "surname", label: game.i18n.localize("TR.NameType.Surname"), selected: nameType === "surname" },
+        { value: "both", label: game.i18n.localize("TR.NameType.Both"), selected: nameType === "both" }
       ];
       vm.filters = (seg.filters ?? []).map((f, fi) => {
         // Region choices depend on the row's race so users can't pick an impossible combo.
@@ -419,7 +426,7 @@ async function rollFormulaScore(formula, actor) {
     return Math.round(roll.total ?? 10);
   } catch (err) {
     console.error(`${LOG} Stat score formula error:`, err);
-    ui.notifications?.warn(`Ability randomizer: could not parse score formula "${formula}".`);
+    ui.notifications?.warn(game.i18n.format("TR.Notif.ScoreFormulaError", { formula }));
     return 10;
   }
 }
@@ -546,7 +553,7 @@ async function resolveGoldValue(formula, actor) {
     return Math.max(0, roll.total ?? 0);
   } catch (err) {
     console.error(`${LOG} Treasure gold formula error:`, err);
-    ui.notifications?.warn(`Treasure randomizer: could not parse gold formula "${formula}".`);
+    ui.notifications?.warn(game.i18n.format("TR.Notif.GoldFormulaError", { formula }));
     return 0;
   }
 }
@@ -860,7 +867,7 @@ async function randomizeTokenName(tokenDoc) {
   if (!unique) {
     const label = tokenDoc.baseActor?.name ?? actor.name;
     ui.notifications?.warn(
-      `Token Randomizer: couldn't find a unique name for "${label}" after ${MAX_NAME_TRIES} tries — kept the duplicate "${name}".`
+      game.i18n.format("TR.Notif.DuplicateName", { label, tries: MAX_NAME_TRIES, name })
     );
     console.warn(`${LOG} Settled on duplicate name "${name}" for ${label} after ${MAX_NAME_TRIES} tries.`);
   } else {
@@ -911,7 +918,7 @@ class TokenRandomizerSettings extends HandlebarsApplicationMixin(ApplicationV2) 
   static DEFAULT_OPTIONS = {
     classes: ["pf1-token-randomizer", "token-randomizer-settings"],
     tag: "div",
-    window: { title: "Randomizer Settings", icon: "fas fa-dice", resizable: true },
+    window: { title: "TR.Window.Settings", icon: "fas fa-dice", resizable: true },
     position: { width: 480, height: "auto" },
     // All class methods are installed before static field initializers run, so the
     // private static handlers below are safe to reference here.
@@ -945,8 +952,8 @@ class TokenRandomizerSettings extends HandlebarsApplicationMixin(ApplicationV2) 
 
   get title() {
     return this.isDefaults
-      ? "Default Randomizer Settings"
-      : `${this.actor?.name ?? "Actor"} — Randomizer Settings`;
+      ? game.i18n.localize("TR.Title.Defaults")
+      : game.i18n.format("TR.Title.Actor", { name: this.actor?.name ?? game.i18n.localize("TR.ActorPlaceholder") });
   }
 
   async _prepareContext(options) {
@@ -977,13 +984,13 @@ class TokenRandomizerSettings extends HandlebarsApplicationMixin(ApplicationV2) 
     // If the saved method was deleted from the custom list, keep it visible (and
     // selected) as an "unavailable" option so the selection isn't silently changed.
     if (!allMethods[this.draftAbilitySettings.method]) {
-      methods.push({ key: this.draftAbilitySettings.method, label: `${this.draftAbilitySettings.method} (unavailable)`, selected: true });
+      methods.push({ key: this.draftAbilitySettings.method, label: game.i18n.format("TR.StatMethod.Unavailable", { method: this.draftAbilitySettings.method }), selected: true });
     }
 
     // Abilities with constraints & priorities
     const abilities = ABILITY_KEYS.map(key => ({
       key,
-      name: ABILITY_NAMES[key],
+      name: game.i18n.localize(ABILITY_NAMES[key]),
       min: this.draftAbilitySettings.constraints[key]?.min ?? 3,
       max: this.draftAbilitySettings.constraints[key]?.max ?? 18,
       priority: this.draftAbilitySettings.priorities?.[key] ?? 0,
@@ -998,7 +1005,7 @@ class TokenRandomizerSettings extends HandlebarsApplicationMixin(ApplicationV2) 
     this._nameDb = db;
     this._adjDb = adjDb;
     // Base-actor name for `actor` components; a placeholder in the defaults dialog.
-    this._actorName = this.actor?.name ?? "Actor";
+    this._actorName = this.actor?.name ?? game.i18n.localize("TR.ActorPlaceholder");
     const nameSegments = buildNameSegmentViewModels(this.draftNameSettings.segments, db, adjDb, this.collapsedSegments);
     const namePreview = buildRandomName(this.draftNameSettings, db, adjDb, this._actorName);
     const names = db.names ?? [];
@@ -1007,7 +1014,7 @@ class TokenRandomizerSettings extends HandlebarsApplicationMixin(ApplicationV2) 
 
     return {
       isDefaults: this.isDefaults,
-      actorName: this.actor?.name || "Default Settings",
+      actorName: this.actor?.name || game.i18n.localize("TR.DefaultSettings"),
       activeTab: this.activeTab,
       // Ability tab
       abilityEnabled: this.draftAbilitySettings.enabled,
@@ -1027,7 +1034,7 @@ class TokenRandomizerSettings extends HandlebarsApplicationMixin(ApplicationV2) 
       treasureRandomizeDistribution: this.draftTreasureSettings.randomizeDistribution,
       coins: COIN_KEYS.map(key => ({
         key,
-        name: COIN_NAMES[key],
+        name: game.i18n.localize(COIN_NAMES[key]),
         pct: this.draftTreasureSettings.distribution[key]?.pct ?? 0,
         min: this.draftTreasureSettings.distribution[key]?.min ?? 0,
         max: this.draftTreasureSettings.distribution[key]?.max ?? 100
@@ -1175,7 +1182,7 @@ class TokenRandomizerSettings extends HandlebarsApplicationMixin(ApplicationV2) 
     const name = buildRandomName(this.draftNameSettings, this._nameDb, this._adjDb, this._actorName);
     // textContent (not innerHTML) since names come from user-supplied data.
     if (name) el.textContent = name;
-    else el.innerHTML = "<em>(empty)</em>";
+    else el.innerHTML = `<em>${game.i18n.localize("TR.Empty")}</em>`;
   }
 
   /** Update the numeric readout next to a weight slider and refresh the preview. */
@@ -1219,8 +1226,8 @@ class TokenRandomizerSettings extends HandlebarsApplicationMixin(ApplicationV2) 
   static async #onClearSegments(event, target) {
     if (!this.draftNameSettings.segments.length) return;
     const ok = await foundry.applications.api.DialogV2.confirm({
-      window: { title: "Clear Name Components" },
-      content: "<p>Remove all name components? Nothing is saved until you click Save, so you can still Cancel to undo.</p>"
+      window: { title: game.i18n.localize("TR.Dialog.ClearSegments.Title") },
+      content: game.i18n.localize("TR.Dialog.ClearSegments.Content")
     });
     if (!ok) return;
     this.draftNameSettings.segments = [];
@@ -1301,12 +1308,12 @@ class TokenRandomizerSettings extends HandlebarsApplicationMixin(ApplicationV2) 
       await game.settings.set(MODULE_ID, "ability-randomizer-defaults", this.draftAbilitySettings);
       await game.settings.set(MODULE_ID, "name-randomizer-defaults", this.draftNameSettings);
       await game.settings.set(MODULE_ID, "treasure-randomizer-defaults", this.draftTreasureSettings);
-      ui.notifications?.info("Default randomizer settings saved.");
+      ui.notifications?.info(game.i18n.localize("TR.Notif.DefaultsSaved"));
     } else {
       await this.actor.setFlag(MODULE_ID, "abilityRandomizer", this.draftAbilitySettings);
       await this.actor.setFlag(MODULE_ID, "nameRandomizer", this.draftNameSettings);
       await this.actor.setFlag(MODULE_ID, "treasureRandomizer", this.draftTreasureSettings);
-      ui.notifications?.info(`Randomizer settings saved for ${this.actor.name}.`);
+      ui.notifications?.info(game.i18n.format("TR.Notif.ActorSaved", { name: this.actor.name }));
       const actorRef = this.actor;
       setTimeout(() => {
         const sheet = actorRef.sheet;
@@ -1335,7 +1342,7 @@ function pickFile(accept, handler) {
       await handler(file);
     } catch (err) {
       console.error(`${LOG} File import error:`, err);
-      ui.notifications?.error(`Import failed: ${err.message}`);
+      ui.notifications?.error(game.i18n.format("TR.Notif.ImportFailed", { message: err.message }));
     }
   });
   input.click();
@@ -1358,7 +1365,7 @@ async function promptForText(title, label, initial = "") {
   return foundry.applications.api.DialogV2.prompt({
     window: { title },
     content: `<div class="form-group"><label>${label}</label><input type="text" name="entryValue" value="${safe}" autofocus /></div>`,
-    ok: { label: "OK", callback: (event, button) => button.form.elements.entryValue.value },
+    ok: { label: game.i18n.localize("TR.OK"), callback: (event, button) => button.form.elements.entryValue.value },
     rejectClose: false
   });
 }
@@ -1367,7 +1374,7 @@ class TokenRandomizerListManager extends HandlebarsApplicationMixin(ApplicationV
   static DEFAULT_OPTIONS = {
     classes: ["pf1-token-randomizer", "token-randomizer-lists"],
     tag: "div",
-    window: { title: "Token Randomizer Lists", icon: "fas fa-list", resizable: true },
+    window: { title: "TR.Window.Lists", icon: "fas fa-list", resizable: true },
     position: { width: 520, height: "auto" },
     actions: {
       importNames: TokenRandomizerListManager.#onImportNames,
@@ -1419,7 +1426,7 @@ class TokenRandomizerListManager extends HandlebarsApplicationMixin(ApplicationV
     pickFile(".csv,.tsv,.txt,.json", async (file) => {
       const parsed = await parseNameFile(file);
       if (!parsed.length) {
-        ui.notifications?.warn("No usable name entries found in the file.");
+        ui.notifications?.warn(game.i18n.localize("TR.Notif.NoNameEntries"));
         return;
       }
       // Merge into the USER database only; the bundled sample is never pulled in here.
@@ -1437,8 +1444,7 @@ class TokenRandomizerListManager extends HandlebarsApplicationMixin(ApplicationV
       await saveUserNames(userNames);
       await loadNameDatabase(true);
       ui.notifications?.info(
-        `Imported ${added} new names (${parsed.length - added} duplicates skipped). ` +
-        `Custom name pool: ${userNames.length}.`
+        game.i18n.format("TR.Notif.NamesImported", { added, skipped: parsed.length - added, total: userNames.length })
       );
       this.render();
     });
@@ -1448,7 +1454,7 @@ class TokenRandomizerListManager extends HandlebarsApplicationMixin(ApplicationV
     const db = await loadNameDatabase(true);
     const names = db.names ?? [];
     if (!names.length) {
-      ui.notifications?.warn("The name database is empty — nothing to export.");
+      ui.notifications?.warn(game.i18n.localize("TR.Notif.NameDbEmpty"));
       return;
     }
     downloadText(`${MODULE_ID}-names.tsv`, namesToTSV(names), "text/tab-separated-values");
@@ -1457,11 +1463,11 @@ class TokenRandomizerListManager extends HandlebarsApplicationMixin(ApplicationV
   // ── Adjective lists ──
 
   static async #onAddAdjList(event, target) {
-    const raw = await promptForText("New Adjective List", "List name:", "");
+    const raw = await promptForText(game.i18n.localize("TR.Prompt.NewAdjList.Title"), game.i18n.localize("TR.Prompt.NewAdjList.Label"), "");
     if (raw === null) return;
     const name = raw.trim();
     if (!name) {
-      ui.notifications?.warn("A list name is required.");
+      ui.notifications?.warn(game.i18n.localize("TR.Notif.ListNameRequired"));
       return;
     }
     pickFile(".txt,.csv,.json", async (file) => {
@@ -1470,7 +1476,7 @@ class TokenRandomizerListManager extends HandlebarsApplicationMixin(ApplicationV
       user[name] = words;
       await saveUserAdjectives(user);
       await loadAdjectiveLists(true);
-      ui.notifications?.info(`Adjective list "${name}" saved (${words.length} words).`);
+      ui.notifications?.info(game.i18n.format("TR.Notif.AdjListSaved", { name, count: words.length }));
       this.render();
     });
   }
@@ -1483,7 +1489,7 @@ class TokenRandomizerListManager extends HandlebarsApplicationMixin(ApplicationV
       user[name] = words;
       await saveUserAdjectives(user);
       await loadAdjectiveLists(true);
-      ui.notifications?.info(`Adjective list "${name}" replaced (${words.length} words).`);
+      ui.notifications?.info(game.i18n.format("TR.Notif.AdjListReplaced", { name, count: words.length }));
       this.render();
     });
   }
@@ -1494,17 +1500,17 @@ class TokenRandomizerListManager extends HandlebarsApplicationMixin(ApplicationV
     const revert = adjDb.sources[name] === "overridden";
     const safe = foundry.utils.escapeHTML?.(name) ?? name;
     const confirmed = await foundry.applications.api.DialogV2.confirm({
-      window: { title: revert ? "Revert Adjective List" : "Delete Adjective List" },
+      window: { title: game.i18n.localize(revert ? "TR.Dialog.RevertAdj.Title" : "TR.Dialog.DeleteAdj.Title") },
       content: revert
-        ? `<p>Revert "<strong>${safe}</strong>" to the bundled default? Your uploaded version will be removed.</p>`
-        : `<p>Delete the custom list "<strong>${safe}</strong>"? This cannot be undone.</p>`
+        ? game.i18n.format("TR.Dialog.RevertAdj.Content", { name: safe })
+        : game.i18n.format("TR.Dialog.DeleteAdj.Content", { name: safe })
     });
     if (!confirmed) return;
     const user = await loadUserAdjectives();
     delete user[name];
     await saveUserAdjectives(user);
     await loadAdjectiveLists(true);
-    ui.notifications?.info(revert ? `"${name}" reverted to the bundled default.` : `"${name}" deleted.`);
+    ui.notifications?.info(revert ? game.i18n.format("TR.Notif.AdjListReverted", { name }) : game.i18n.format("TR.Notif.AdjListDeleted", { name }));
     this.render();
   }
 }
@@ -1515,7 +1521,7 @@ class TokenRandomizerStatMethods extends HandlebarsApplicationMixin(ApplicationV
   static DEFAULT_OPTIONS = {
     classes: ["pf1-token-randomizer", "token-randomizer-stat-methods"],
     tag: "div",
-    window: { title: "Manage Stat Methods", icon: "fas fa-dice-d6", resizable: true },
+    window: { title: "TR.Window.StatMethods", icon: "fas fa-dice-d6", resizable: true },
     position: { width: 520, height: "auto" },
     actions: {
       addMethod: TokenRandomizerStatMethods.#onAddMethod,
@@ -1598,35 +1604,39 @@ class TokenRandomizerStatMethods extends HandlebarsApplicationMixin(ApplicationV
       const row = this.draft[i];
       const label = String(row.label ?? "").trim();
       if (!label) {
-        ui.notifications?.warn(`Stat method #${i + 1} needs a name.`);
+        ui.notifications?.warn(game.i18n.format("TR.Notif.StatMethodNeedsName", { num: i + 1 }));
         return;
       }
       if (row.type === "formula") {
         const formula = String(row.formula ?? "").trim();
         if (!formula) {
-          ui.notifications?.warn(`Formula method "${label}" needs a formula.`);
+          ui.notifications?.warn(game.i18n.format("TR.Notif.FormulaMethodNeedsFormula", { label }));
           return;
         }
         if (!Roll.validate(formula)) {
-          ui.notifications?.warn(`Method "${label}": "${formula}" is not a valid dice formula.`);
+          ui.notifications?.warn(game.i18n.format("TR.Notif.InvalidFormula", { label, formula }));
           return;
         }
         cleaned.push({ id: row.id ?? `custom-${foundry.utils.randomID()}`, type: "formula", label, formula });
       } else {
         const values = (row.values ?? []).map(v => Number.parseInt(v, 10));
         if (values.length !== ABILITY_KEYS.length || values.some(v => !Number.isFinite(v))) {
-          ui.notifications?.warn(`Array method "${label}" must have ${ABILITY_KEYS.length} numeric values.`);
+          ui.notifications?.warn(game.i18n.format("TR.Notif.ArrayNeedsValues", { label, count: ABILITY_KEYS.length }));
           return;
         }
         if (values.some(v => v < 1)) {
-          ui.notifications?.warn(`Array method "${label}" values must be at least 1.`);
+          ui.notifications?.warn(game.i18n.format("TR.Notif.ArrayMinValue", { label }));
           return;
         }
         cleaned.push({ id: row.id ?? `custom-${foundry.utils.randomID()}`, type: "array", label, values });
       }
     }
     await game.settings.set(MODULE_ID, "custom-stat-methods", cleaned);
-    ui.notifications?.info(`Saved ${cleaned.length} custom stat method${cleaned.length === 1 ? "" : "s"}.`);
+    ui.notifications?.info(
+      cleaned.length === 1
+        ? game.i18n.localize("TR.Notif.StatMethodsSavedOne")
+        : game.i18n.format("TR.Notif.StatMethodsSavedMany", { count: cleaned.length })
+    );
     this.close();
   }
 
@@ -1647,7 +1657,7 @@ Hooks.on("getActorSheetHeaderButtons", (sheet, buttons) => {
   if (actor.prototypeToken?.actorLink) return;
 
   buttons.unshift({
-    label: "Randomizer",
+    label: game.i18n.localize("TR.Button.Randomizer"),
     class: "token-randomizer-settings",
     icon: "fas fa-dice",
     onclick: () => {
@@ -1671,10 +1681,10 @@ function updateRandomizerButtonColor(sheet) {
   if (btn) {
     if (randomizerActive) {
       btn.style.color = "#e8a63e";
-      btn.title = "Randomizer (Active)";
+      btn.title = game.i18n.localize("TR.Button.RandomizerActive");
     } else {
       btn.style.color = "";
-      btn.title = "Randomizer";
+      btn.title = game.i18n.localize("TR.Button.Randomizer");
     }
   }
 }
@@ -1713,8 +1723,8 @@ Hooks.once("init", () => {
   }
 
   game.settings.register(MODULE_ID, "ability-randomizer-defaults", {
-    name: "Ability Randomizer Default Settings",
-    hint: "Default settings for the ability score randomizer.",
+    name: "TR.Settings.AbilityDefaults.Name",
+    hint: "TR.Settings.AbilityDefaults.Hint",
     scope: "world",
     config: false,
     type: Object,
@@ -1735,8 +1745,8 @@ Hooks.once("init", () => {
   });
 
   game.settings.register(MODULE_ID, "name-randomizer-defaults", {
-    name: "Name Randomizer Default Settings",
-    hint: "Default settings for the name randomizer.",
+    name: "TR.Settings.NameDefaults.Name",
+    hint: "TR.Settings.NameDefaults.Hint",
     scope: "world",
     config: false,
     type: Object,
@@ -1747,8 +1757,8 @@ Hooks.once("init", () => {
   });
 
   game.settings.register(MODULE_ID, "treasure-randomizer-defaults", {
-    name: "Treasure Randomizer Default Settings",
-    hint: "Default settings for the treasure/currency randomizer.",
+    name: "TR.Settings.TreasureDefaults.Name",
+    hint: "TR.Settings.TreasureDefaults.Hint",
     scope: "world",
     config: false,
     type: Object,
@@ -1766,8 +1776,8 @@ Hooks.once("init", () => {
   });
 
   game.settings.register(MODULE_ID, "custom-stat-methods", {
-    name: "Custom Stat Methods",
-    hint: "User-defined ability-score arrays and formulas for the randomizer.",
+    name: "TR.Settings.CustomStatMethods.Name",
+    hint: "TR.Settings.CustomStatMethods.Hint",
     scope: "world",
     config: false,
     type: Array,
@@ -1775,27 +1785,27 @@ Hooks.once("init", () => {
   });
 
   game.settings.registerMenu(MODULE_ID, "randomizer-defaults-menu", {
-    name: "Token Randomizer Defaults",
-    label: "Configure Defaults",
-    hint: "Set the default randomizer settings applied to new actors.",
+    name: "TR.Menu.Defaults.Name",
+    label: "TR.Menu.Defaults.Label",
+    hint: "TR.Menu.Defaults.Hint",
     icon: "fas fa-dice",
     type: TokenRandomizerSettings,
     restricted: true
   });
 
   game.settings.registerMenu(MODULE_ID, "randomizer-lists-menu", {
-    name: "Token Randomizer Lists",
-    label: "Manage Lists",
-    hint: "Import/export the name database and manage adjective lists used by the name builder.",
+    name: "TR.Menu.Lists.Name",
+    label: "TR.Menu.Lists.Label",
+    hint: "TR.Menu.Lists.Hint",
     icon: "fas fa-list",
     type: TokenRandomizerListManager,
     restricted: true
   });
 
   game.settings.registerMenu(MODULE_ID, "randomizer-stat-methods-menu", {
-    name: "Token Randomizer Stat Methods",
-    label: "Manage Stat Methods",
-    hint: "Define custom ability-score arrays and dice formulas for the generation-method dropdown.",
+    name: "TR.Menu.StatMethods.Name",
+    label: "TR.Menu.StatMethods.Label",
+    hint: "TR.Menu.StatMethods.Hint",
     icon: "fas fa-dice-d6",
     type: TokenRandomizerStatMethods,
     restricted: true

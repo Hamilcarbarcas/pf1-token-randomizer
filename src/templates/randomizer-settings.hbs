@@ -3,13 +3,13 @@
   {{!-- Tab Bar --}}
   <nav class="randomizer-tabs">
     <button type="button" class="randomizer-tab-btn {{#if (eq activeTab 'ability-scores')}}active{{/if}}" data-action="switchTab" data-tab="ability-scores">
-      <i class="fas fa-dice-d20"></i> Ability Scores
+      <i class="fas fa-dice-d20"></i> {{localize "TR.Tab.AbilityScores"}}
     </button>
     <button type="button" class="randomizer-tab-btn {{#if (eq activeTab 'name')}}active{{/if}}" data-action="switchTab" data-tab="name">
-      <i class="fas fa-signature"></i> Name
+      <i class="fas fa-signature"></i> {{localize "TR.Tab.Name"}}
     </button>
     <button type="button" class="randomizer-tab-btn {{#if (eq activeTab 'treasure')}}active{{/if}}" data-action="switchTab" data-tab="treasure">
-      <i class="fas fa-coins"></i> Treasure
+      <i class="fas fa-coins"></i> {{localize "TR.Tab.Treasure"}}
     </button>
   </nav>
 
@@ -20,14 +20,14 @@
       <div class="setting-row enable-row">
         <label>
           <input type="checkbox" class="randomizer-enabled" {{#if abilityEnabled}}checked{{/if}} />
-          <span>Enable Ability Score Randomization</span>
+          <span>{{localize "TR.Ability.EnableRandomization"}}</span>
         </label>
       </div>
-      <p class="hint">When enabled, ability scores will be randomized when an unlinked token of this actor is placed on a scene.</p>
+      <p class="hint">{{localize "TR.Ability.EnableHint"}}</p>
     </div>
 
     <div class="settings-section method-section {{#unless abilityEnabled}}disabled{{/unless}}">
-      <h3>Generation Method</h3>
+      <h3>{{localize "TR.Ability.GenerationMethod"}}</h3>
       <select class="randomizer-method" {{#unless abilityEnabled}}disabled{{/unless}}>
         {{#each methods}}
         <option value="{{key}}" {{#if selected}}selected{{/if}}>{{label}}</option>
@@ -36,26 +36,26 @@
     </div>
 
     <div class="settings-section constraints-section {{#unless abilityEnabled}}disabled{{/unless}}">
-      <h3>Ability Score Constraints</h3>
-      <p class="hint">Set minimum and maximum values for each ability score. Scores will be assigned and clamped to fit these ranges.</p>
+      <h3>{{localize "TR.Ability.Constraints"}}</h3>
+      <p class="hint">{{localize "TR.Ability.ConstraintsHint"}}</p>
 
       <div class="setting-row prioritize-row">
         <label>
           <input type="checkbox" class="prioritize-enabled" {{#if prioritizeEnabled}}checked{{/if}} {{#unless abilityEnabled}}disabled{{/unless}} />
-          <span>Enable Priority Assignment</span>
+          <span>{{localize "TR.Ability.EnablePriority"}}</span>
         </label>
       </div>
-      <p class="hint">When enabled, abilities with higher priority (6 = highest) will receive higher scores. Equal priorities are assigned randomly. Priority is secondary to min/max constraints.</p>
+      <p class="hint">{{localize "TR.Ability.PriorityHint"}}</p>
 
-      <p class="hint">Check <strong>Nil</strong> to leave an ability blank ("&mdash;") instead of assigning a score &mdash; the modifier becomes +0 and the ability is treated as absent (e.g. mindless creatures with no Intelligence). This is not the same as a score of 0, which gives a &minus;5 modifier.</p>
+      <p class="hint">{{{localize "TR.Ability.NilHint"}}}</p>
 
       <div class="constraints-grid">
         <div class="constraint-header">
-          <span class="ability-name-header">Ability</span>
-          <span class="min-header">Min</span>
-          <span class="max-header">Max</span>
-          <span class="priority-header {{#unless prioritizeEnabled}}disabled{{/unless}}">Priority</span>
-          <span class="nil-header">Nil</span>
+          <span class="ability-name-header">{{localize "TR.Col.Ability"}}</span>
+          <span class="min-header">{{localize "TR.Col.Min"}}</span>
+          <span class="max-header">{{localize "TR.Col.Max"}}</span>
+          <span class="priority-header {{#unless prioritizeEnabled}}disabled{{/unless}}">{{localize "TR.Col.Priority"}}</span>
+          <span class="nil-header">{{localize "TR.Col.Nil"}}</span>
         </div>
         {{#each abilities}}
         <div class="constraint-row">
@@ -78,21 +78,21 @@
       <div class="setting-row enable-row">
         <label>
           <input type="checkbox" class="name-enabled" {{#if nameEnabled}}checked{{/if}} />
-          <span>Enable Name Randomization</span>
+          <span>{{localize "TR.Name.EnableRandomization"}}</span>
         </label>
       </div>
-      <p class="hint">When enabled, the token name is assembled from the components below when an unlinked token is placed.</p>
+      <p class="hint">{{localize "TR.Name.EnableHint"}}</p>
     </div>
 
     <div class="settings-section name-builder-section {{#unless nameEnabled}}disabled{{/unless}}">
-      <h3>Name Builder</h3>
-      <p class="hint">The name is built by joining each component, left to right, with spaces. Components resolving to nothing are skipped.</p>
+      <h3>{{localize "TR.Name.Builder"}}</h3>
+      <p class="hint">{{localize "TR.Name.BuilderHint"}}</p>
 
       {{!-- Live preview --}}
       <div class="name-preview-row">
-        <span class="name-preview-label">Sample:</span>
-        <span class="name-preview-value">{{#if namePreview}}{{namePreview}}{{else}}<em>(empty)</em>{{/if}}</span>
-        <button type="button" class="name-preview-reroll" data-action="rerollPreview" title="Reroll sample">
+        <span class="name-preview-label">{{localize "TR.Name.Sample"}}</span>
+        <span class="name-preview-value">{{#if namePreview}}{{namePreview}}{{else}}<em>{{localize "TR.Empty"}}</em>{{/if}}</span>
+        <button type="button" class="name-preview-reroll" data-action="rerollPreview" title="{{localize "TR.Name.RerollTitle"}}">
           <i class="fas fa-dice"></i>
         </button>
       </div>
@@ -100,10 +100,10 @@
       {{!-- Name components (ordered, collapsible) --}}
       <div class="name-components-box">
         <div class="components-box-header">
-          <span class="components-box-title">Name Components</span>
+          <span class="components-box-title">{{localize "TR.Name.Components"}}</span>
           {{#if nameSegments.length}}
-          <button type="button" class="components-clear-btn" data-action="clearSegments" title="Remove all components">
-            <i class="fas fa-trash"></i> Clear
+          <button type="button" class="components-clear-btn" data-action="clearSegments" title="{{localize "TR.Name.ClearTitle"}}">
+            <i class="fas fa-trash"></i> {{localize "TR.Name.Clear"}}
           </button>
           {{/if}}
         </div>
@@ -113,15 +113,15 @@
           <div class="segment-header" {{#unless isActor}}data-action="toggleSegment" data-segment="{{index}}" title="Click to collapse / expand"{{/unless}}>
             <span class="segment-title">
               {{#unless isActor}}<i class="fas fa-chevron-down segment-collapse-indicator"></i>{{/unless}}
-              {{#if isDatabase}}<i class="fas fa-signature"></i> Roster Name{{/if}}
-              {{#if isAdjective}}<i class="fas fa-tags"></i> Adjective{{/if}}
-              {{#if isStatic}}<i class="fas fa-font"></i> Static Text{{/if}}
-              {{#if isActor}}<i class="fas fa-user"></i> Actor Name{{/if}}
+              {{#if isDatabase}}<i class="fas fa-signature"></i> {{localize "TR.Segment.RosterName"}}{{/if}}
+              {{#if isAdjective}}<i class="fas fa-tags"></i> {{localize "TR.Segment.Adjective"}}{{/if}}
+              {{#if isStatic}}<i class="fas fa-font"></i> {{localize "TR.Segment.StaticText"}}{{/if}}
+              {{#if isActor}}<i class="fas fa-user"></i> {{localize "TR.Segment.ActorName"}}{{/if}}
             </span>
             <div class="segment-controls">
-              <button type="button" class="segment-btn" data-action="moveSegmentUp" data-segment="{{index}}" title="Move up" {{#if isFirst}}disabled{{/if}}><i class="fas fa-chevron-up"></i></button>
-              <button type="button" class="segment-btn" data-action="moveSegmentDown" data-segment="{{index}}" title="Move down" {{#if isLast}}disabled{{/if}}><i class="fas fa-chevron-down"></i></button>
-              <button type="button" class="segment-btn segment-btn-danger" data-action="removeSegment" data-segment="{{index}}" title="Remove segment"><i class="fas fa-trash"></i></button>
+              <button type="button" class="segment-btn" data-action="moveSegmentUp" data-segment="{{index}}" title="{{localize "TR.Segment.MoveUp"}}" {{#if isFirst}}disabled{{/if}}><i class="fas fa-chevron-up"></i></button>
+              <button type="button" class="segment-btn" data-action="moveSegmentDown" data-segment="{{index}}" title="{{localize "TR.Segment.MoveDown"}}" {{#if isLast}}disabled{{/if}}><i class="fas fa-chevron-down"></i></button>
+              <button type="button" class="segment-btn segment-btn-danger" data-action="removeSegment" data-segment="{{index}}" title="{{localize "TR.Segment.Remove"}}"><i class="fas fa-trash"></i></button>
             </div>
           </div>
           {{#unless isActor}}
@@ -129,14 +129,14 @@
 
             {{#if isDatabase}}
             <div class="segment-field">
-              <label>Name type</label>
+              <label>{{localize "TR.Segment.NameType"}}</label>
               <select class="segment-nametype" data-segment="{{index}}">
                 {{#each nameTypeOptions}}<option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}
               </select>
             </div>
             <div class="filter-list">
               <div class="filter-list-header">
-                <span>Race</span><span>Region</span><span>Gender</span><span>Weight</span><span></span>
+                <span>{{localize "TR.Filter.Race"}}</span><span>{{localize "TR.Filter.Region"}}</span><span>{{localize "TR.Filter.Gender"}}</span><span>{{localize "TR.Filter.Weight"}}</span><span></span>
               </div>
               {{#each filters}}
               <div class="filter-entry">
@@ -153,18 +153,18 @@
                   <input type="range" class="filter-weight" data-segment="{{../index}}" data-filter="{{index}}" min="1" max="10" value="{{weight}}" />
                   <span class="weight-value">{{weight}}</span>
                 </div>
-                <button type="button" class="filter-delete" data-action="removeFilter" data-segment="{{../index}}" data-filter="{{index}}" title="Remove filter"><i class="fas fa-times"></i></button>
+                <button type="button" class="filter-delete" data-action="removeFilter" data-segment="{{../index}}" data-filter="{{index}}" title="{{localize "TR.Filter.Remove"}}"><i class="fas fa-times"></i></button>
               </div>
               {{/each}}
-              <button type="button" class="filter-add" data-action="addFilter" data-segment="{{index}}"><i class="fas fa-plus"></i> Add filter</button>
+              <button type="button" class="filter-add" data-action="addFilter" data-segment="{{index}}"><i class="fas fa-plus"></i> {{localize "TR.Filter.Add"}}</button>
             </div>
             {{/if}}
 
             {{#if isAdjective}}
             {{#if noLists}}
-            <p class="hint">No adjective lists are defined. Add lists from <strong>Game Settings → Token Randomizer Lists</strong>.</p>
+            <p class="hint">{{{localize "TR.Adj.NoLists"}}}</p>
             {{else}}
-            <p class="hint">Check the lists to draw from and set each one's weight. A list is picked by weight, then a random word from it.</p>
+            <p class="hint">{{localize "TR.Adj.Hint"}}</p>
             <div class="adj-list">
               {{#each lists}}
               <div class="adj-entry {{#unless enabled}}disabled-weight{{/unless}}">
@@ -184,8 +184,8 @@
 
             {{#if isStatic}}
             <div class="segment-field">
-              <label>Text</label>
-              <input type="text" class="segment-static-text" data-segment="{{index}}" value="{{text}}" placeholder="e.g. the Bold" />
+              <label>{{localize "TR.Static.Text"}}</label>
+              <input type="text" class="segment-static-text" data-segment="{{index}}" value="{{text}}" placeholder="{{localize "TR.Static.Placeholder"}}" />
             </div>
             {{/if}}
 
@@ -193,23 +193,23 @@
           {{/unless}}
         </div>
         {{else}}
-        <p class="hint no-segments-hint">No components yet — add one below to start building the name.</p>
+        <p class="hint no-segments-hint">{{localize "TR.Name.NoComponents"}}</p>
         {{/each}}
         </div>
 
         {{!-- Add a component (type chosen at add-time) --}}
         <div class="segment-add-row">
-          <span class="segment-add-label">Add component:</span>
-          <button type="button" class="segment-add-btn" data-action="addSegment" data-type="database"><strong class="add-plus">+</strong> <i class="fas fa-signature"></i> Roster Name</button>
-          <button type="button" class="segment-add-btn" data-action="addSegment" data-type="adjective"><strong class="add-plus">+</strong> <i class="fas fa-tags"></i> Adjective</button>
-          <button type="button" class="segment-add-btn" data-action="addSegment" data-type="actor"><strong class="add-plus">+</strong> <i class="fas fa-user"></i> Actor Name</button>
-          <button type="button" class="segment-add-btn" data-action="addSegment" data-type="static"><strong class="add-plus">+</strong> <i class="fas fa-font"></i> Static</button>
+          <span class="segment-add-label">{{localize "TR.Name.AddComponent"}}</span>
+          <button type="button" class="segment-add-btn" data-action="addSegment" data-type="database"><strong class="add-plus">+</strong> <i class="fas fa-signature"></i> {{localize "TR.Segment.RosterName"}}</button>
+          <button type="button" class="segment-add-btn" data-action="addSegment" data-type="adjective"><strong class="add-plus">+</strong> <i class="fas fa-tags"></i> {{localize "TR.Segment.Adjective"}}</button>
+          <button type="button" class="segment-add-btn" data-action="addSegment" data-type="actor"><strong class="add-plus">+</strong> <i class="fas fa-user"></i> {{localize "TR.Segment.ActorName"}}</button>
+          <button type="button" class="segment-add-btn" data-action="addSegment" data-type="static"><strong class="add-plus">+</strong> <i class="fas fa-font"></i> {{localize "TR.Segment.Static"}}</button>
         </div>
       </div>
     </div>
 
     <div class="settings-section name-database-section">
-      <p class="hint">{{nameCount}} names loaded ({{givenCount}} given, {{surnameCount}} surname). Manage the name database and adjective lists in <strong>Game Settings → Token Randomizer Lists</strong>.</p>
+      <p class="hint">{{{localize "TR.Name.DbInfo" count=nameCount given=givenCount surname=surnameCount}}}</p>
     </div>
   </div>
   {{/if}}
@@ -221,36 +221,36 @@
       <div class="setting-row enable-row">
         <label>
           <input type="checkbox" class="treasure-enabled" {{#if treasureEnabled}}checked{{/if}} />
-          <span>Enable Treasure Randomization</span>
+          <span>{{localize "TR.Treasure.EnableRandomization"}}</span>
         </label>
       </div>
-      <p class="hint">When enabled, the actor's carried currency (pp/gp/sp/cp) is generated and <strong>replaced</strong> when an unlinked token of this actor is placed on a scene.</p>
+      <p class="hint">{{{localize "TR.Treasure.EnableHint"}}}</p>
     </div>
 
     <div class="settings-section treasure-value-section {{#unless treasureEnabled}}disabled{{/unless}}">
-      <h3>Total Value</h3>
-      <p class="hint">Total treasure value in gold pieces. Supports dice and actor data, e.g. <code>2d6*100</code> or <code>@cr * 50</code> (<code>@cr</code> = the actor's total CR).</p>
-      <input type="text" class="treasure-gold-formula" value="{{treasureGoldFormula}}" placeholder="e.g. 2d6*100" {{#unless treasureEnabled}}disabled{{/unless}} />
+      <h3>{{localize "TR.Treasure.TotalValue"}}</h3>
+      <p class="hint">{{{localize "TR.Treasure.TotalValueHint"}}}</p>
+      <input type="text" class="treasure-gold-formula" value="{{treasureGoldFormula}}" placeholder="{{localize "TR.Treasure.FormulaPlaceholder"}}" {{#unless treasureEnabled}}disabled{{/unless}} />
     </div>
 
     <div class="settings-section treasure-dist-section {{#unless treasureEnabled}}disabled{{/unless}}">
-      <h3>Coin Distribution</h3>
-      <p class="hint">Share of the total <em>value</em> held in each coin type (computed as gold-equivalent, then converted to coins). Each coin count is rounded down.</p>
+      <h3>{{localize "TR.Treasure.CoinDistribution"}}</h3>
+      <p class="hint">{{{localize "TR.Treasure.CoinDistributionHint"}}}</p>
 
       <div class="setting-row prioritize-row">
         <label>
           <input type="checkbox" class="treasure-randomize-distribution" {{#if treasureRandomizeDistribution}}checked{{/if}} {{#unless treasureEnabled}}disabled{{/unless}} />
-          <span>Randomize Distribution</span>
+          <span>{{localize "TR.Treasure.RandomizeDistribution"}}</span>
         </label>
       </div>
-      <p class="hint">{{#if treasureRandomizeDistribution}}A random weight is picked within each coin's Min/Max (0–100), then the four weights are normalized into proportions of the total value.{{else}}The four percentages are normalized by their sum, so they need not add up to exactly 100.{{/if}}</p>
+      <p class="hint">{{#if treasureRandomizeDistribution}}{{localize "TR.Treasure.RandomizeHintOn"}}{{else}}{{localize "TR.Treasure.RandomizeHintOff"}}{{/if}}</p>
 
       <div class="constraints-grid">
         {{#if treasureRandomizeDistribution}}
         <div class="constraint-header treasure-header-minmax">
-          <span class="ability-name-header">Coin</span>
-          <span class="min-header">Min</span>
-          <span class="max-header">Max</span>
+          <span class="ability-name-header">{{localize "TR.Col.Coin"}}</span>
+          <span class="min-header">{{localize "TR.Col.Min"}}</span>
+          <span class="max-header">{{localize "TR.Col.Max"}}</span>
         </div>
         {{#each coins}}
         <div class="constraint-row treasure-row-minmax">
@@ -261,8 +261,8 @@
         {{/each}}
         {{else}}
         <div class="constraint-header treasure-header-pct">
-          <span class="ability-name-header">Coin</span>
-          <span class="pct-header">Percent</span>
+          <span class="ability-name-header">{{localize "TR.Col.Coin"}}</span>
+          <span class="pct-header">{{localize "TR.Col.Percent"}}</span>
         </div>
         {{#each coins}}
         <div class="constraint-row treasure-row-pct">
@@ -279,13 +279,13 @@
   {{!-- ═══════════ Shared Actions ═══════════ --}}
   <div class="settings-actions">
     {{#unless isDefaults}}
-    <button type="button" class="reset-defaults-btn" data-action="reset" title="Reset to module default settings">
-      <i class="fas fa-undo"></i> Reset to Defaults
+    <button type="button" class="reset-defaults-btn" data-action="reset" title="{{localize "TR.Action.ResetTitle"}}">
+      <i class="fas fa-undo"></i> {{localize "TR.Action.Reset"}}
     </button>
     {{/unless}}
     <div class="action-buttons">
-      <button type="button" class="settings-cancel-btn" data-action="cancel">Cancel</button>
-      <button type="button" class="settings-ok-btn" data-action="save">Save</button>
+      <button type="button" class="settings-cancel-btn" data-action="cancel">{{localize "TR.Action.Cancel"}}</button>
+      <button type="button" class="settings-ok-btn" data-action="save">{{localize "TR.Action.Save"}}</button>
     </div>
   </div>
 </div>

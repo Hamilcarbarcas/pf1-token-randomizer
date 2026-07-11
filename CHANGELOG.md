@@ -9,6 +9,9 @@
 
 ## [Unreleased]
 
+### Changed
+- All user-facing text (settings menus, dialogs, notifications, the settings/list/stat-method windows, and header button) is now localizable via `game.i18n` (English `lang/en.json` included).
+
 ### Added
 - **Modular name builder.** Token names are now assembled from an ordered list of components (in a framed, collapsible "Name Components" box) instead of a single filtered pick. Component types:
   - **Roster Name** — draws given names, surnames, or both from the name database, using one or more weighted Race/Region/Gender filters (each dimension optional).
