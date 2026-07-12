@@ -96,6 +96,12 @@
           <i class="fas fa-dice"></i>
         </button>
       </div>
+      {{#if obscureFeatureEnabled}}
+      <div class="name-preview-row obscured-preview-row">
+        <span class="name-preview-label">{{localize "TR.Name.ObscuredSample"}}</span>
+        <span class="obscured-preview-value">{{#if obscuredPreview}}{{obscuredPreview}}{{else}}<em>{{localize "TR.Empty"}}</em>{{/if}}</span>
+      </div>
+      {{/if}}
 
       {{!-- Name components (ordered, collapsible) --}}
       <div class="name-components-box">
@@ -109,10 +115,10 @@
         </div>
         <div class="name-segments">
         {{#each nameSegments}}
-        <div class="name-segment {{#if collapsed}}collapsed{{/if}} {{#if isActor}}no-body{{/if}}">
-          <div class="segment-header" {{#unless isActor}}data-action="toggleSegment" data-segment="{{index}}" title="Click to collapse / expand"{{/unless}}>
+        <div class="name-segment {{#if collapsed}}collapsed{{/if}} {{#unless hasBody}}no-body{{/unless}}">
+          <div class="segment-header" {{#if hasBody}}data-action="toggleSegment" data-segment="{{index}}" title="Click to collapse / expand"{{/if}}>
             <span class="segment-title">
-              {{#unless isActor}}<i class="fas fa-chevron-down segment-collapse-indicator"></i>{{/unless}}
+              {{#if hasBody}}<i class="fas fa-chevron-down segment-collapse-indicator"></i>{{/if}}
               {{#if isDatabase}}<i class="fas fa-signature"></i> {{localize "TR.Segment.RosterName"}}{{/if}}
               {{#if isAdjective}}<i class="fas fa-tags"></i> {{localize "TR.Segment.Adjective"}}{{/if}}
               {{#if isStatic}}<i class="fas fa-font"></i> {{localize "TR.Segment.StaticText"}}{{/if}}
@@ -124,7 +130,7 @@
               <button type="button" class="segment-btn segment-btn-danger" data-action="removeSegment" data-segment="{{index}}" title="{{localize "TR.Segment.Remove"}}"><i class="fas fa-trash"></i></button>
             </div>
           </div>
-          {{#unless isActor}}
+          {{#if hasBody}}
           <div class="segment-body">
 
             {{#if isDatabase}}
@@ -189,8 +195,25 @@
             </div>
             {{/if}}
 
+            {{#if obscureEnabled}}
+            <div class="segment-field segment-obscure">
+              <label>{{localize "TR.Obscure.Label"}}</label>
+              <select class="segment-obscure-mode" data-segment="{{index}}">
+                {{#each obscureOptions}}<option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}
+              </select>
+            </div>
+            <p class="hint">{{{localize "TR.Obscure.Hint"}}}</p>
+            {{#if showObscuredText}}
+            <div class="segment-field segment-obscure-alt">
+              <label>{{localize "TR.Obscure.AltLabel"}}</label>
+              <input type="text" class="segment-obscured-text" data-segment="{{index}}" value="{{obscuredText}}" placeholder="{{localize "TR.Obscure.AltPlaceholder"}}" />
+            </div>
+            <p class="hint">{{localize "TR.Obscure.AltHint"}}</p>
+            {{/if}}
+            {{/if}}
+
           </div>
-          {{/unless}}
+          {{/if}}
         </div>
         {{else}}
         <p class="hint no-segments-hint">{{localize "TR.Name.NoComponents"}}</p>

@@ -193,11 +193,16 @@ function selectOptions(values, selected, anyLabel = game.i18n.localize("TR.Any")
  * Each segment gets type flags and its type-specific controls (database filter rows
  * with per-row select options, adjective list toggles, or a static text field).
  */
-function buildNameSegmentViewModels(segments, db, adjDb, collapsed) {
+function buildNameSegmentViewModels(segments, db, adjDb, collapsed, obscureEnabled = false) {
   const races = getUniqueValues(db, "race");
   const genders = getUniqueValues(db, "gender");
   const adjNames = Object.keys(adjDb.lists).sort();
   const list = segments ?? [];
+  const obscureModeLabels = {
+    both: game.i18n.localize("TR.Obscure.Mode.Both"),
+    dm: game.i18n.localize("TR.Obscure.Mode.Dm"),
+    obscured: game.i18n.localize("TR.Obscure.Mode.Obscured")
+  };
   return list.map((seg, index) => {
     const vm = {
       index,
@@ -205,6 +210,18 @@ function buildNameSegmentViewModels(segments, db, adjDb, collapsed) {
       isLast: index === list.length - 1,
       collapsed: collapsed?.has(index) ?? false
     };
+    // Obscure controls (only surfaced when the feature is on). Every segment type gets
+    // them, including `actor`, so the actor segment grows a body when the feature is on.
+    if (obscureEnabled) {
+      const mode = seg.obscure ?? "both";
+      vm.obscureEnabled = true;
+      vm.obscure = mode;
+      vm.obscuredText = seg.obscuredText ?? "";
+      vm.showObscuredText = mode === "dm";
+      vm.obscureOptions = ["both", "dm", "obscured"].map(value => ({
+        value, label: obscureModeLabels[value], selected: mode === value
+      }));
+    }
     if (seg.type === "database") {
       vm.isDatabase = true;
       const nameType = seg.nameType ?? "given";
@@ -240,6 +257,9 @@ function buildNameSegmentViewModels(segments, db, adjDb, collapsed) {
       vm.isStatic = true;
       vm.text = seg.text ?? "";
     }
+    // The actor segment normally has no body; it gains one (for the obscure controls)
+    // only when the feature is on. Every other type always has a body.
+    vm.hasBody = !vm.isActor || obscureEnabled;
     return vm;
   });
 }
@@ -637,13 +657,23 @@ const DEFAULT_SEGMENT_WEIGHT = 5;
  * single `actor` (Actor Name) component instead. Already migrated configs (those with
  * a `segments` array) pass through unchanged.
  */
+/**
+ * Ensure every segment carries an `obscure` tag (default "both"), so pre-obscure
+ * configs read back with an explicit mode. Non-destructive: an existing tag wins, and
+ * any `obscuredText` is preserved.
+ */
+function withObscureDefaults(settings) {
+  if (!Array.isArray(settings?.segments)) return settings;
+  return { ...settings, segments: settings.segments.map(s => ({ obscure: "both", ...s })) };
+}
+
 function migrateNameSettings(settings) {
-  if (!settings) return { enabled: false, segments: [{ type: "actor" }] };
-  if (Array.isArray(settings.segments)) return settings;
+  if (!settings) return withObscureDefaults({ enabled: false, segments: [{ type: "actor" }] });
+  if (Array.isArray(settings.segments)) return withObscureDefaults(settings);
   if (!settings.race && !settings.region && !settings.gender) {
-    return { enabled: !!settings.enabled, segments: [{ type: "actor" }] };
+    return withObscureDefaults({ enabled: !!settings.enabled, segments: [{ type: "actor" }] });
   }
-  return {
+  return withObscureDefaults({
     enabled: !!settings.enabled,
     segments: [{
       type: "database",
@@ -655,7 +685,7 @@ function migrateNameSettings(settings) {
         weight: DEFAULT_SEGMENT_WEIGHT
       }]
     }]
-  };
+  });
 }
 
 function getActorNameRandomizerSettings(actor) {
@@ -793,23 +823,45 @@ function resolveAdjectiveSegment(seg, adjDb) {
   return words[Math.floor(Math.random() * words.length)];
 }
 
+/** Resolve one segment to its drawn string (a single random draw per segment). */
+function resolveSegment(seg, db, adjDb, actorName) {
+  if (seg.type === "database") return resolveDatabaseSegment(seg, db);
+  if (seg.type === "adjective") return resolveAdjectiveSegment(seg, adjDb);
+  if (seg.type === "static") return String(seg.text ?? "").trim();
+  if (seg.type === "actor") return String(actorName ?? "").trim();
+  return "";
+}
+
 /**
- * Assemble a random name from the ordered segment list. Each segment resolves to a
- * string; empty results are skipped, and the parts are joined with single spaces.
- * `actorName` is the live base-actor name used by `actor` segments. Returns "" when
- * nothing resolved (caller then leaves the token name unchanged).
+ * Assemble the real (observer-visible) and obscured (non-observer) names from the
+ * ordered segment list in a SINGLE pass. Each segment is resolved once, then its one
+ * drawn value is routed into the two names by its `obscure` tag, so a "both" segment
+ * shows the same rolled value in each — not two independent rolls:
+ *   • "both"     — value in both names.
+ *   • "dm"       — value in the real name; `obscuredText` (or nothing) in the obscured name.
+ *   • "obscured" — value in the obscured name only.
+ * A segment with no tag (pre-obscure configs) is treated as "both".
+ * `actorName` is the live base-actor name used by `actor` segments. Either name is
+ * "" when nothing resolved into it.
  */
-function buildRandomName(settings, db, adjDb, actorName = "") {
-  const parts = [];
+function buildNames(settings, db, adjDb, actorName = "") {
+  const realParts = [];
+  const obscuredParts = [];
   for (const seg of settings.segments ?? []) {
-    let part = "";
-    if (seg.type === "database") part = resolveDatabaseSegment(seg, db);
-    else if (seg.type === "adjective") part = resolveAdjectiveSegment(seg, adjDb);
-    else if (seg.type === "static") part = String(seg.text ?? "").trim();
-    else if (seg.type === "actor") part = String(actorName ?? "").trim();
-    if (part) parts.push(part);
+    const value = resolveSegment(seg, db, adjDb, actorName);
+    const mode = seg.obscure ?? "both";
+    if (mode === "dm") {
+      if (value) realParts.push(value);
+      const alt = String(seg.obscuredText ?? "").trim();
+      if (alt) obscuredParts.push(alt);
+    } else if (mode === "obscured") {
+      if (value) obscuredParts.push(value);
+    } else { // "both"
+      if (value) { realParts.push(value); obscuredParts.push(value); }
+    }
   }
-  return parts.join(" ").replace(/\s+/g, " ").trim();
+  const join = (parts) => parts.join(" ").replace(/\s+/g, " ").trim();
+  return { real: join(realParts), obscured: join(obscuredParts) };
 }
 
 // How many times to re-roll a colliding name before giving up and accepting a duplicate.
@@ -848,21 +900,33 @@ async function randomizeTokenName(tokenDoc) {
   const used = canVary ? usedSiblingNames(tokenDoc) : new Set();
   const actorName = tokenDoc.baseActor?.name ?? actor.name;
 
-  let name = "";
+  let names = { real: "", obscured: "" };
   let unique = true;
   for (let attempt = 0; attempt < MAX_NAME_TRIES; attempt++) {
-    name = buildRandomName(settings, db, adjDb, actorName);
-    if (!name) break; // all segments resolved empty — nothing to place
-    unique = !used.has(name);
+    names = buildNames(settings, db, adjDb, actorName);
+    if (!names.real) break; // all segments resolved empty — nothing to place
+    unique = !used.has(names.real); // uniqueness is chased on the REAL name only
     if (unique) break;
   }
 
+  const name = names.real;
   if (!name) {
     console.warn(`${LOG} Name randomizer produced an empty name; leaving token name unchanged.`);
     return;
   }
 
-  await tokenDoc.update({ name });
+  // The real name is what the token is actually called (observers/GM see it). When the
+  // segment tags produced a distinct obscured name, stash it on the token so display-
+  // time substitution has something to show non-observers, and default the per-token
+  // obscure toggle on. Whether that substitution actually happens is gated separately
+  // by the global setting (added in a later phase); storage here is unconditional so
+  // enabling the feature later works for tokens placed after this point.
+  const update = { name };
+  if (names.obscured && names.obscured !== name) {
+    update[`flags.${MODULE_ID}.obscuredName`] = names.obscured;
+    update[`flags.${MODULE_ID}.obscure`] = true;
+  }
+  await tokenDoc.update(update);
 
   if (!unique) {
     const label = tokenDoc.baseActor?.name ?? actor.name;
@@ -1006,8 +1070,12 @@ class TokenRandomizerSettings extends HandlebarsApplicationMixin(ApplicationV2) 
     this._adjDb = adjDb;
     // Base-actor name for `actor` components; a placeholder in the defaults dialog.
     this._actorName = this.actor?.name ?? game.i18n.localize("TR.ActorPlaceholder");
-    const nameSegments = buildNameSegmentViewModels(this.draftNameSettings.segments, db, adjDb, this.collapsedSegments);
-    const namePreview = buildRandomName(this.draftNameSettings, db, adjDb, this._actorName);
+    const obscureFeatureEnabled = game.settings.get(MODULE_ID, "enable-obscured-npc-names");
+    const nameSegments = buildNameSegmentViewModels(this.draftNameSettings.segments, db, adjDb, this.collapsedSegments, obscureFeatureEnabled);
+    // One build gives a consistent real/obscured pair for both preview lines.
+    const preview = buildNames(this.draftNameSettings, db, adjDb, this._actorName);
+    const namePreview = preview.real;
+    const obscuredPreview = preview.obscured;
     const names = db.names ?? [];
     const givenCount = names.filter(n => n.type === "given").length;
     const surnameCount = names.filter(n => n.type === "surname").length;
@@ -1023,8 +1091,10 @@ class TokenRandomizerSettings extends HandlebarsApplicationMixin(ApplicationV2) 
       abilities,
       // Name tab
       nameEnabled: this.draftNameSettings.enabled,
+      obscureFeatureEnabled,
       nameSegments,
       namePreview,
+      obscuredPreview,
       nameCount: names.length,
       givenCount,
       surnameCount,
@@ -1107,6 +1177,14 @@ class TokenRandomizerSettings extends HandlebarsApplicationMixin(ApplicationV2) 
       seg(e.currentTarget).text = e.currentTarget.value;
       this._refreshPreview();
     });
+    on(".segment-obscure-mode", "change", (e) => {
+      seg(e.currentTarget).obscure = e.currentTarget.value;
+      this.render(); // re-render to show/hide the "dm" alternate-text field
+    });
+    on(".segment-obscured-text", "change", (e) => {
+      seg(e.currentTarget).obscuredText = e.currentTarget.value;
+      this._refreshPreview();
+    });
     on(".filter-race", "change", (e) => {
       const f = seg(e.currentTarget).filters[Number(e.currentTarget.dataset.filter)];
       f.race = e.currentTarget.value;
@@ -1175,14 +1253,20 @@ class TokenRandomizerSettings extends HandlebarsApplicationMixin(ApplicationV2) 
     });
   }
 
-  /** Regenerate the live name-preview sample in place (no full re-render). */
+  /** Regenerate the live name-preview sample(s) in place (no full re-render). */
   _refreshPreview() {
-    const el = this.element?.querySelector(".name-preview-value");
-    if (!el || !this._nameDb || !this._adjDb) return;
-    const name = buildRandomName(this.draftNameSettings, this._nameDb, this._adjDb, this._actorName);
-    // textContent (not innerHTML) since names come from user-supplied data.
-    if (name) el.textContent = name;
-    else el.innerHTML = `<em>${game.i18n.localize("TR.Empty")}</em>`;
+    if (!this._nameDb || !this._adjDb) return;
+    // One build keeps the real/obscured pair consistent across both preview lines.
+    const built = buildNames(this.draftNameSettings, this._nameDb, this._adjDb, this._actorName);
+    const setPreview = (selector, value) => {
+      const el = this.element?.querySelector(selector);
+      if (!el) return;
+      // textContent (not innerHTML) since names come from user-supplied data.
+      if (value) el.textContent = value;
+      else el.innerHTML = `<em>${game.i18n.localize("TR.Empty")}</em>`;
+    };
+    setPreview(".name-preview-value", built.real);
+    setPreview(".obscured-preview-value", built.obscured); // no-op when feature is off
   }
 
   /** Update the numeric readout next to a weight slider and refresh the preview. */
@@ -1714,6 +1798,157 @@ Hooks.on("createToken", async (tokenDoc, options, userId) => {
   }
 });
 
+// ─── Token Config: Obscured-name controls (Identity tab) ─────────────────────────
+// Injects a per-token override into the token configuration so a GM can flip obscuring
+// on/off and set the obscured name directly — covering linked/named tokens that never
+// pass through the placement-time name builder, plus ad-hoc adjustments. The inputs are
+// named `flags.<module>.<key>`, so core's form submission persists them for free.
+
+Hooks.on("renderTokenConfig", (app, html) => {
+  if (!game.user?.isGM) return;
+  if (!game.settings.get(MODULE_ID, "enable-obscured-npc-names")) return;
+
+  const root = html instanceof HTMLElement ? html : html?.[0];
+  if (!root) return;
+  if (root.querySelector(".token-randomizer-obscure")) return; // guard against re-render
+
+  const tokenDoc = app.document ?? app.token ?? app.object;
+  const obscure = tokenDoc?.getFlag?.(MODULE_ID, "obscure") ?? false;
+  const obscuredName = tokenDoc?.getFlag?.(MODULE_ID, "obscuredName") ?? "";
+  const esc = (s) => foundry.utils.escapeHTML?.(String(s)) ?? String(s);
+
+  const wrap = document.createElement("div");
+  wrap.className = "token-randomizer-obscure";
+  wrap.innerHTML = `
+    <div class="form-group">
+      <label>${game.i18n.localize("TR.TokenConfig.Obscure")}</label>
+      <input type="checkbox" name="flags.${MODULE_ID}.obscure" ${obscure ? "checked" : ""}/>
+      <p class="hint">${game.i18n.localize("TR.TokenConfig.ObscureHint")}</p>
+    </div>
+    <div class="form-group">
+      <label>${game.i18n.localize("TR.TokenConfig.ObscuredName")}</label>
+      <input type="text" name="flags.${MODULE_ID}.obscuredName" value="${esc(obscuredName)}" placeholder="${game.i18n.localize("TR.TokenConfig.ObscuredNamePlaceholder")}"/>
+      <p class="hint">${game.i18n.localize("TR.TokenConfig.ObscuredNameHint")}</p>
+    </div>`;
+
+  // Prefer to sit right under the token's own name field (Identity tab); fall back to
+  // the identity tab section, then the form, so a core DOM change degrades gracefully.
+  const nameGroup = root.querySelector('input[name="name"]')?.closest(".form-group");
+  const identityTab = root.querySelector('.tab[data-tab="identity"]')
+    ?? root.querySelector('.tab[data-tab="character"]');
+  if (nameGroup) nameGroup.after(wrap);
+  else if (identityTab) identityTab.appendChild(wrap);
+  else root.querySelector("form")?.appendChild(wrap);
+
+  // Content grew — let the auto-sized window re-fit.
+  app.setPosition?.({ height: "auto" });
+});
+
+// ─── Obscured-name display substitution ──────────────────────────────────────────
+// Real-name-primary model: `token.name` is always the true name; users without at
+// least Observer permission are shown the stored obscured name at DISPLAY time, per
+// client. Every surface funnels through the one `shouldObscure` gate below, so adding
+// the canvas nameplate later is just another call site — no new policy logic.
+
+/** The obscured name stored on a token, or "" when none/blank. */
+function getObscuredName(tokenDoc) {
+  return tokenDoc?.getFlag?.(MODULE_ID, "obscuredName") || "";
+}
+
+/**
+ * Whether `user` should see `tokenDoc`'s obscured name instead of its real one. True
+ * only when: the feature is on, the token opts in (`obscure` flag truthy), a non-empty
+ * obscured name exists, and the user lacks Observer permission on the token's actor.
+ * GMs always hold Observer, so they always see the real name.
+ */
+function shouldObscure(tokenDoc, user = game.user) {
+  if (!tokenDoc) return false;
+  if (!game.settings.get(MODULE_ID, "enable-obscured-npc-names")) return false;
+  if (!tokenDoc.getFlag?.(MODULE_ID, "obscure")) return false;
+  if (!getObscuredName(tokenDoc)) return false;
+  const actor = tokenDoc.actor;
+  if (!actor) return false;
+  return !actor.testUserPermission(user, "OBSERVER");
+}
+
+/** Resolve a chat message's speaker to its TokenDocument, or null. */
+function speakerToken(message) {
+  const speaker = message?.speaker;
+  if (!speaker?.token) return null;
+  const scene = speaker.scene ? game.scenes.get(speaker.scene) : null;
+  return scene?.tokens.get(speaker.token) ?? null;
+}
+
+// Chat: swap the speaker name in the message header (core `<h4 class="message-sender">`)
+// for non-observers. Header only in v1 — scanning the card body is deferred.
+Hooks.on("renderChatMessageHTML", (message, html) => {
+  if (!game.settings.get(MODULE_ID, "enable-obscured-npc-names")) return;
+  const root = html instanceof HTMLElement ? html : html?.[0];
+  if (!root) return;
+
+  const tokenDoc = speakerToken(message);
+  if (!shouldObscure(tokenDoc)) return;
+
+  const sender = root.querySelector(".message-sender");
+  if (sender) sender.textContent = getObscuredName(tokenDoc);
+});
+
+// Combat tracker: swap each combatant's displayed name (core `.token-name strong.name`)
+// for non-observers. Re-fires on turn changes, so it self-heals.
+Hooks.on("renderCombatTracker", (app, html) => {
+  if (!game.settings.get(MODULE_ID, "enable-obscured-npc-names")) return;
+  const root = html instanceof HTMLElement ? html : html?.[0];
+  const combat = app?.viewed ?? game.combat;
+  if (!root || !combat) return;
+
+  for (const li of root.querySelectorAll("li.combatant[data-combatant-id]")) {
+    const combatant = combat.combatants.get(li.dataset.combatantId);
+    const tokenDoc = combatant?.token;
+    if (!shouldObscure(tokenDoc)) continue;
+    const nameEl = li.querySelector(".token-name .name") ?? li.querySelector(".token-name");
+    if (nameEl) nameEl.textContent = getObscuredName(tokenDoc);
+  }
+});
+
+// Canvas nameplate: on hover / Alt-highlight, if the token's display mode leaves the
+// player with NO name (core sets `nameplate.visible = false`), show the obscured name
+// instead. Runs in `refreshToken`, after core's `_refreshState`/`_refreshNameplate`, so
+// it can't be clobbered and there is no real-name flash. Never overrides a name the
+// display mode already grants (guarded by `np.visible`), so tokens set to show everyone
+// a name are left alone.
+Hooks.on("refreshToken", (token) => {
+  const isHover = token?.hover || token?.layer?.highlightObjects;
+  if (!isHover) return;
+  if (!game.settings.get(MODULE_ID, "obscure-name-on-hover")) return;
+  const np = token.nameplate;
+  if (!np || np.visible) return;
+  if (!shouldObscure(token.document)) return; // also checks the master setting
+  np.text = getObscuredName(token.document);
+  np.visible = true;
+});
+
+// Present "Show Obscured Name on Hover" as a nested sub-option of its master toggle in
+// the core Configure Settings menu: indent it, and disable/dim it while the master
+// "Enable Obscured NPC Names" setting is off. Core has no native setting dependencies,
+// so this is done by post-processing the rendered menu (inputs are named `<ns>.<key>`).
+Hooks.on("renderSettingsConfig", (app, html) => {
+  const root = html instanceof HTMLElement ? html : html?.[0];
+  if (!root) return;
+  const master = root.querySelector(`[name="${MODULE_ID}.enable-obscured-npc-names"]`);
+  const sub = root.querySelector(`[name="${MODULE_ID}.obscure-name-on-hover"]`);
+  const subGroup = sub?.closest(".form-group");
+  if (!master || !sub || !subGroup) return;
+
+  subGroup.classList.add("tr-suboption");
+  const sync = () => {
+    const on = master.checked;
+    sub.disabled = !on;
+    subGroup.classList.toggle("tr-disabled", !on);
+  };
+  sync();
+  master.addEventListener("change", sync);
+});
+
 // ─── Register Settings ─────────────────────────────────────────────────────────
 
 Hooks.once("init", () => {
@@ -1782,6 +2017,30 @@ Hooks.once("init", () => {
     config: false,
     type: Array,
     default: []
+  });
+
+  // Master switch for the obscured-name feature. Gates both the per-segment obscure
+  // controls in the Name tab and the display-time substitution consumers. World-scoped
+  // so a client's obscure decision is consistent for everyone.
+  game.settings.register(MODULE_ID, "enable-obscured-npc-names", {
+    name: "TR.Settings.ObscureNames.Name",
+    hint: "TR.Settings.ObscureNames.Hint",
+    scope: "world",
+    config: true,
+    type: Boolean,
+    default: false
+  });
+
+  // Sub-toggle of the above: reveal the obscured name on canvas hover / Alt-highlight
+  // when the token's display mode would otherwise show the player no name. Has no
+  // effect unless the master setting is on (the hover handler checks both).
+  game.settings.register(MODULE_ID, "obscure-name-on-hover", {
+    name: "TR.Settings.ObscureOnHover.Name",
+    hint: "TR.Settings.ObscureOnHover.Hint",
+    scope: "world",
+    config: true,
+    type: Boolean,
+    default: true
   });
 
   game.settings.registerMenu(MODULE_ID, "randomizer-defaults-menu", {

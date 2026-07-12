@@ -17,6 +17,7 @@ Drop five copies of the same goblin actor and you can end up with five goblins t
   - **Treasure** — a gold-value formula converted into a pp/gp/sp/cp coin spread.
 - **World defaults.** A *Token Randomizer Defaults* menu (in module settings) sets the baseline applied to every new actor. A separate *Token Randomizer Lists* menu manages the name database and adjective lists, and a *Token Randomizer Stat Methods* menu adds custom ability-score arrays and dice formulas.
 - **Only touches unlinked tokens.** Linked tokens (which share the actor's real data) are never modified. Re-randomization is suppressed when a token is recreated by a scene/region teleport.
+- **Obscured NPC names** *(optional)*. Show players an alternate name for a token unless they have at least **Observer** permission on it — substituted in chat and the combat tracker. Configured per name component, with a per-token override. See [Obscured NPC names](#obscured-npc-names).
 
 ---
 
@@ -108,6 +109,24 @@ Databases from before the `type` column keep working — entries without a type 
 
 **Adjective lists.** Each list is a simple single-column list of words with a name. Bundled lists ship with the module; uploading a list with the **same name overrides** it (revertible), and any **other name adds** a new list. Custom lists can be deleted. Upload a **TXT** (one word per line), **CSV**, or a **JSON** array. Your lists live at `worlds/<your-world>/pf1-token-randomizer-adjectives.json`.
 
+#### Obscured NPC names
+
+Enable **Obscured NPC Names** under **Game Settings → Configure Settings → PF1 Token Randomizer** to let a token show a different name to players who don't have at least **Observer** permission on it. GMs and observers always see the real name; everyone else sees the obscured one — substituted in **chat message headers** and the **combat tracker**.
+
+When the setting is on, every component in the Name builder gains a **Visibility** control:
+
+- **Both names** — the component appears in the real *and* obscured name (the default).
+- **Real name only** — the component is shown only to observers. You can optionally give it an **obscured substitute** string that non-observers see in its place; leave it blank to simply drop the component for them.
+- **Obscured name only** — the component appears only in the obscured name (a decoy label that observers don't see).
+
+Both names are built together when the token is placed, so a component's random draw is the same in each. The second **"Players see:"** preview line shows the obscured result live.
+
+For linked or named tokens that don't go through the placement builder — or any one-off adjustment — open the token's **configuration → Identity** tab, where an **Obscure name from non-observers** checkbox and an **Obscured name** field let you set the override directly on that token.
+
+**On-hover reveal.** A **Show Obscured Name on Hover** sub-setting (on by default) fills a common gap: if you keep NPC display names set to *Hovered by Owner* (so players get no name on mouse-over), a player who hovers — or Alt-highlights — such a token will see its **obscured** name instead of nothing. It only fills the gap: tokens whose display mode already shows everyone a name are left as-is, so this never reveals a name the display mode was hiding on purpose.
+
+> **This is a presentation-layer feature, not a security boundary.** The token's real name is still sent to every client, so a determined player can read it via the browser console. It hides the name in the normal interface, nothing more.
+
 ### 💰 Treasure
 
 Replaces the actor's carried currency (pp/gp/sp/cp) with a freshly generated amount.
@@ -125,6 +144,7 @@ Replaces the actor's carried currency (pp/gp/sp/cp) with a freshly generated amo
 - **Unlinked tokens only.** Linked tokens and the prototype actor are never modified.
 - **Treasure replaces, not adds.** Existing currency on the token is overwritten.
 - Randomization runs once per token. A token recreated by a scene/region teleport keeps its rolled values (tracked via a `randomized` token flag).
+- **Obscured names hide, they don't secure.** The substitution happens per client at display time; the real name is still synced to every client and readable via the console. Coverage is limited to chat headers, the combat tracker, and the on-hover canvas nameplate (gap-fill only) — other surfaces (third-party UIs, chat card bodies, and nameplates for tokens whose display mode already shows a name) still show the real name.
 
 ---
 

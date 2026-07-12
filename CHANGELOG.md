@@ -26,6 +26,11 @@
   - **Array** — six fixed values, like Standard/Elite/Champion (assigned via the actor's min/max and priority, order-independent).
   - **Formula** — a dice formula rolled once per ability (e.g. `4d6dl1`, `2d6+6`), using the game's standard formula syntax including drop/keep modifiers and `@`-references.
   - A saved method that is later deleted shows as *(unavailable)* on the actor and falls back to straight 10s until reselected.
+- **Obscured NPC names.** A new *Enable Obscured NPC Names* setting lets a token show an alternate name to any user without at least **Observer** permission on it — currently substituted in **chat message headers** and the **combat tracker** (GMs and observers always see the real name).
+  - A *Show Obscured Name on Hover* sub-setting (on by default) also reveals the obscured name on the canvas when a player mouses over or Alt-highlights an NPC whose display mode would otherwise show them no name — without overriding names the display mode already grants.
+  - Each name component in the **Name** tab gains a **Visibility** control — *Both names*, *Real name only* (with an optional obscured substitute string), or *Obscured name only* — so the real and obscured names are built together at token placement. A second live "Players see:" preview shows the obscured result.
+  - A per-token override (checkbox + obscured-name field) is added to the token configuration's **Identity** tab, covering linked/named tokens that never pass through the placement builder.
+  - Note: this hides the name in the interface only; it is not a security boundary — a determined player can still read the real name via the browser console.
 
 ### Changed
 - Name import moved out of *Configure Defaults* into the new *Manage Lists* menu.

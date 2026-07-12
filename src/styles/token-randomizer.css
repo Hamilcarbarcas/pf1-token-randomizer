@@ -283,6 +283,40 @@
   color: #fff;
 }
 
+/* Second preview line: what non-observers see. Cooler tint + italics set it apart
+   from the amber "real name" line, and pull it up so the two read as one pair. */
+.pf1-token-randomizer .obscured-preview-row {
+  margin-top: -6px;
+  background: rgba(120, 160, 220, 0.08);
+  border-color: rgba(120, 160, 220, 0.25);
+}
+
+.pf1-token-randomizer .obscured-preview-value {
+  flex: 1;
+  font-weight: 600;
+  font-style: italic;
+  color: rgba(220, 230, 245, 0.92);
+}
+
+.pf1-token-randomizer .obscured-preview-value em {
+  color: rgba(255, 255, 255, 0.4);
+  font-weight: 400;
+  font-style: normal;
+}
+
+/* "Show Obscured Name on Hover" nested under its master toggle in the core Configure
+   Settings menu (not scoped to .pf1-token-randomizer — the settings menu is core UI).
+   Indented with a rule; dimmed while the master "Enable Obscured NPC Names" is off. */
+.tr-suboption {
+  margin-left: 18px;
+  padding-left: 12px;
+  border-left: 2px solid rgba(255, 255, 255, 0.15);
+}
+
+.tr-suboption.tr-disabled {
+  opacity: 0.5;
+}
+
 /* Framed "Name Components" box */
 .pf1-token-randomizer .name-components-box {
   border: 1px solid rgba(255, 255, 255, 0.15);

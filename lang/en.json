@@ -77,6 +77,10 @@
   "TR.Settings.TreasureDefaults.Hint": "Default settings for the treasure/currency randomizer.",
   "TR.Settings.CustomStatMethods.Name": "Custom Stat Methods",
   "TR.Settings.CustomStatMethods.Hint": "User-defined ability-score arrays and formulas for the randomizer.",
+  "TR.Settings.ObscureNames.Name": "Enable Obscured NPC Names",
+  "TR.Settings.ObscureNames.Hint": "When enabled, a token can show an alternate name to any user without at least Observer permission on it — currently in chat and the combat tracker. Choose which name components are hidden per actor in Randomizer → Name, or set a per-token override in the token's configuration. Note: this hides the name in the interface only; a determined player can still read the real name via the browser console.",
+  "TR.Settings.ObscureOnHover.Name": "Show Obscured Name on Hover",
+  "TR.Settings.ObscureOnHover.Hint": "Requires Enable Obscured NPC Names. When a player mouses over (or Alt-highlights) an NPC token whose display mode would otherwise show them no name, show its obscured name instead. Tokens already set to show a name to everyone are unaffected.",
   "TR.Menu.Defaults.Name": "Token Randomizer Defaults",
   "TR.Menu.Defaults.Label": "Configure Defaults",
   "TR.Menu.Defaults.Hint": "Set the default randomizer settings applied to new actors.",
@@ -140,6 +144,22 @@
 
   "TR.Static.Text": "Text",
   "TR.Static.Placeholder": "e.g. the Bold",
+
+  "TR.Name.ObscuredSample": "Players see:",
+  "TR.Obscure.Label": "Visibility",
+  "TR.Obscure.Mode.Both": "Both names",
+  "TR.Obscure.Mode.Dm": "Real name only",
+  "TR.Obscure.Mode.Obscured": "Obscured name only",
+  "TR.Obscure.Hint": "<em>Real name only</em> hides this component from non-observers; <em>Obscured name only</em> shows it only to them (a decoy).",
+  "TR.Obscure.AltLabel": "Obscured substitute",
+  "TR.Obscure.AltPlaceholder": "e.g. Hooded Figure",
+  "TR.Obscure.AltHint": "Optional. Non-observers see this text in place of the component. Leave blank to simply drop the component for them.",
+
+  "TR.TokenConfig.Obscure": "Obscure name from non-observers",
+  "TR.TokenConfig.ObscureHint": "When on, users without Observer permission on this token see the obscured name below instead of its real name.",
+  "TR.TokenConfig.ObscuredName": "Obscured name",
+  "TR.TokenConfig.ObscuredNamePlaceholder": "e.g. Hooded Figure",
+  "TR.TokenConfig.ObscuredNameHint": "Shown to non-observers. Auto-filled from the Name tab when a token is placed; edit here to override it for this token.",
 
   "TR.Treasure.EnableRandomization": "Enable Treasure Randomization",
   "TR.Treasure.EnableHint": "When enabled, the actor's carried currency (pp/gp/sp/cp) is generated and <strong>replaced</strong> when an unlinked token of this actor is placed on a scene.",
