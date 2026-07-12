@@ -148,6 +148,23 @@ Replaces the actor's carried currency (pp/gp/sp/cp) with a freshly generated amo
 
 ---
 
+## API (for other modules & macros)
+
+So other code can resolve the name a given user *should* see — and never accidentally read the real name off `token.name` / `speaker.alias` for an obscured NPC — the module exposes helpers on its module object once `setup` has run:
+
+```js
+const tr = game.modules.get("pf1-token-randomizer").api;
+
+tr.getDisplayName(tokenDoc, user = game.user);      // obscured name if the gate applies, else token.name
+tr.getSpeakerDisplayName(speaker, user = game.user); // same, resolved from a ChatMessage speaker (falls back to alias)
+tr.shouldObscure(tokenDoc, user = game.user);       // boolean: is the obscure gate active for this user?
+tr.getObscuredName(tokenDoc);                        // the raw stored obscured name, or ""
+```
+
+All routes funnel through the same `shouldObscure` gate the UI substitutions use (feature enabled + token opted in + non-empty obscured name + user lacks Observer). GMs always hold Observer, so they always get the real name. As with the display features, this is presentation-layer only — the real name is still synced to every client.
+
+---
+
 ## License
 
 Released under the [GNU GPL v3](LICENSE).

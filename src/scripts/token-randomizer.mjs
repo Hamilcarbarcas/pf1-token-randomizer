@@ -1879,6 +1879,40 @@ function speakerToken(message) {
   return scene?.tokens.get(speaker.token) ?? null;
 }
 
+/**
+ * The name `user` should see for `tokenDoc`: its obscured name when the obscure
+ * gate applies, otherwise its real `token.name`. This is the single authoritative
+ * entry point other modules/macros should call so they never leak the real name.
+ */
+function getDisplayName(tokenDoc, user = game.user) {
+  if (!tokenDoc) return "";
+  return shouldObscure(tokenDoc, user) ? getObscuredName(tokenDoc) : (tokenDoc.name ?? "");
+}
+
+/**
+ * Convenience wrapper resolving a chat-message speaker to the name `user` should see.
+ * Falls back to the speaker's stored alias when there is no token to obscure.
+ */
+function getSpeakerDisplayName(speaker, user = game.user) {
+  const scene = speaker?.scene ? game.scenes.get(speaker.scene) : null;
+  const tokenDoc = speaker?.token && scene ? scene.tokens.get(speaker.token) : null;
+  if (tokenDoc && shouldObscure(tokenDoc, user)) return getObscuredName(tokenDoc);
+  return speaker?.alias ?? tokenDoc?.name ?? "";
+}
+
+// Public API so other modules/macros can resolve obscured names through the one gate
+// above, instead of re-implementing the policy (and risking a real-name leak).
+Hooks.once("setup", () => {
+  const mod = game.modules.get(MODULE_ID);
+  if (!mod) return;
+  mod.api = Object.assign(mod.api ?? {}, {
+    getObscuredName,
+    shouldObscure,
+    getDisplayName,
+    getSpeakerDisplayName,
+  });
+});
+
 // Chat: swap the speaker name in the message header (core `<h4 class="message-sender">`)
 // for non-observers. Header only in v1 — scanning the card body is deferred.
 Hooks.on("renderChatMessageHTML", (message, html) => {
