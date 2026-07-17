@@ -2,7 +2,7 @@
 
 A Foundry VTT module for the **Pathfinder 1e** system that randomizes **ability scores**, **names**, and **carried treasure** for unlinked NPC tokens as they are dropped onto a scene. Configuration is per-actor (from the actor sheet).
 
-**Manifest URL:** `https://github.com/Hamilcarbarcas/pf1-token-randomzier/releases/latest/download/module.json`
+**Manifest URL:** `https://github.com/Hamilcarbarcas/pf1-token-randomizer/releases/latest/download/module.json`
 
 ## Requirements
 
