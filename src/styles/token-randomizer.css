@@ -12,6 +12,16 @@
   --tr-accent: #e8a63e;
 }
 
+/* All three randomizer windows use height: "auto", so the frame grows to fit its
+   content with no upper bound — a tall tab (e.g. the Name builder) can run off the
+   bottom of the screen, hiding content and the Save/Cancel buttons. Cap the content
+   area to the viewport and let it scroll instead. Applies to every window carrying
+   the shared frame class. */
+.pf1-token-randomizer .window-content {
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+}
+
 .pf1-token-randomizer .token-randomizer-settings {
   padding: 8px;
   font-family: var(--font-primary, "Signika", sans-serif);

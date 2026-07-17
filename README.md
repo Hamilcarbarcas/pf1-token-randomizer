@@ -1,12 +1,11 @@
 # PF1 Token Randomizer
 
-A Foundry VTT module for the **Pathfinder 1e** system that randomizes **ability scores**, **names**, and **carried treasure** for unlinked NPC tokens the moment they are dropped onto a scene. Configuration is per-actor (from the character/NPC sheet).
+A Foundry VTT module for the **Pathfinder 1e** system that randomizes **ability scores**, **names**, and **carried treasure** for unlinked NPC tokens as they are dropped onto a scene. Configuration is per-actor (from the actor sheet).
 
-Drop five copies of the same goblin actor and you can end up with five goblins that have different stat spreads, different names, and different pocket change — all without touching the parent actor.
+## Requirements
 
-> Requires Foundry VTT **v13+** and the **Pathfinder 1st Edition** system.
-
----
+- Foundry VTT v13
+- PF1e system v11.10
 
 ## Features
 
@@ -39,7 +38,9 @@ When an **unlinked** token is placed on a scene by a GM, each enabled randomizer
 
 ## The three randomizers
 
-### 🎲 Ability Scores
+### Ability Scores
+
+![Ability Scores tab](assets/Randomizer%20-%20Ability%20Scores.png)
 
 Pick a **generation method**:
 
@@ -69,7 +70,9 @@ Beyond the built-in methods, you can define your own under **Game Settings → C
 
 Deleting a custom method that an actor still references leaves that actor's saved selection showing as *(unavailable)* in the dropdown; until you pick a different method, it falls back to straight 10s when the token is placed.
 
-### ✍️ Name
+### Name
+
+![Name tab](assets/Randomizer%20-%20Name.png)
 
 The token's name is **built from an ordered list of segments**, joined left to right with single spaces. Add as many as you like, reorder them with the ▲▼ arrows, and delete the ones you don't want. A **Sample** line at the top shows a live example (click the 🎲 to reroll it). If every segment resolves to nothing, the token name is left unchanged.
 
@@ -81,6 +84,20 @@ Components are shown in a framed **Name Components** box; click a component's he
 - **Static** — a fixed string you type (e.g. `the Bold`), the same for every token.
 
 Add components with the **+ Roster Name / + Adjective / + Actor Name / + Static** buttons at the bottom of the box.
+
+Each component expands to its own editor:
+
+![Roster Name component](assets/Randomizer%20-%20Name%20-%20Roster%20Name.png)
+
+*Roster Name — name type, one or more weighted Race / Region / Gender filters, and (when obscuring is on) a visibility control.*
+
+![Adjective component](assets/Randomizer%20-%20Name%20-%20Adjective.png)
+
+*Adjective — check the lists to draw from and weight each one.*
+
+![Actor Name component](assets/Randomizer%20-%20Name%20-%20Actor%20Name.png)
+
+*Actor Name — no settings of its own beyond visibility; it tracks the base actor's name.*
 
 **Duplicate avoidance.** When a token is placed, its rolled name is checked against the other tokens of the same actor already on the scene; if it collides, the name is re-rolled (up to 5 attempts) to keep siblings distinct. If no unique name can be found in 5 tries — or the name has no random components — the duplicate is kept, and a warning is shown that a random name couldn't be made unique.
 
@@ -127,7 +144,9 @@ For linked or named tokens that don't go through the placement builder — or an
 
 > **This is a presentation-layer feature, not a security boundary.** The token's real name is still sent to every client, so a determined player can read it via the browser console. It hides the name in the normal interface, nothing more.
 
-### 💰 Treasure
+### Treasure
+
+![Treasure tab](assets/Randomizer%20-%20Treasure.png)
 
 Replaces the actor's carried currency (pp/gp/sp/cp) with a freshly generated amount.
 
@@ -140,7 +159,6 @@ Replaces the actor's carried currency (pp/gp/sp/cp) with a freshly generated amo
 
 ## Notes & limitations
 
-- **GM-only.** All randomization runs on the GM client that places the token; players never trigger it.
 - **Unlinked tokens only.** Linked tokens and the prototype actor are never modified.
 - **Treasure replaces, not adds.** Existing currency on the token is overwritten.
 - Randomization runs once per token. A token recreated by a scene/region teleport keeps its rolled values (tracked via a `randomized` token flag).

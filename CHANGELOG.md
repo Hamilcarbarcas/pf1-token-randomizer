@@ -7,7 +7,7 @@
   release body. If no matching section exists, the release fails.
 -->
 
-## [Unreleased]
+## [1.0.0] 2026-07-17
 
 ### Changed
 - All user-facing text (settings menus, dialogs, notifications, the settings/list/stat-method windows, and header button) is now localizable via `game.i18n` (English `lang/en.json` included).
