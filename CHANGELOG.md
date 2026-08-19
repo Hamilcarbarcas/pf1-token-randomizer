@@ -7,6 +7,11 @@
   release body. If no matching section exists, the release fails.
 -->
 
+## [Unreleased]
+
+### Fixed
+- Unsupported actor types (vehicles, traps, haunts, basic actors) are no longer randomized. They have no *Randomizer* button, so they were silently falling back to the **world default** settings at token placement — writing ability scores and currency onto actors that have neither. Randomization is now limited to **character** and **NPC** actors at every entry point.
+
 ## [1.0.0] 2026-07-17
 
 ### Changed

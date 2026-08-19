@@ -8,6 +8,18 @@
 const MODULE_ID = "pf1-token-randomizer";
 const LOG = "PF1 Token Randomizer |";
 
+// Actor types this module knows how to randomize. Everything the randomizers touch —
+// ability scores, currency, PC/NPC-shaped names — only exists on these two. Other PF1
+// types (vehicle, trap, haunt, basic) never get a config button, so without this gate
+// they would silently inherit the *world defaults* at token placement and have
+// `system.abilities` / `system.currency` written onto schemas that don't have them.
+const RANDOMIZABLE_ACTOR_TYPES = ["character", "npc"];
+
+/** Whether the randomizers apply to this actor at all (see RANDOMIZABLE_ACTOR_TYPES). */
+function isRandomizableActor(actor) {
+  return !!actor && RANDOMIZABLE_ACTOR_TYPES.includes(actor.type);
+}
+
 const ABILITY_KEYS = ["str", "dex", "con", "int", "wis", "cha"];
 // Values are i18n keys, resolved via game.i18n.localize() at use time.
 const ABILITY_NAMES = {
@@ -621,7 +633,16 @@ function distributionToCoins(goldValue, props) {
 
 // ─── Settings Helpers ──────────────────────────────────────────────────────────
 
+// The three getters below are also called with a null actor by the module-level
+// "defaults" dialog, which is why the unsupported-type guard tests `actor &&` rather
+// than `isRandomizableActor(actor)` outright: no actor means "editing the defaults",
+// while an actor of an unsupported type means "this feature does not apply".
+function unsupportedActor(actor) {
+  return !!actor && !isRandomizableActor(actor);
+}
+
 function getActorRandomizerSettings(actor) {
+  if (unsupportedActor(actor)) return { ...getDefaultRandomizerSettings(), enabled: false };
   const flags = actor?.getFlag?.(MODULE_ID, "abilityRandomizer") ?? actor?.flags?.[MODULE_ID]?.abilityRandomizer;
   const defaults = getDefaultRandomizerSettings();
   if (!flags) return defaults;
@@ -689,6 +710,7 @@ function migrateNameSettings(settings) {
 }
 
 function getActorNameRandomizerSettings(actor) {
+  if (unsupportedActor(actor)) return { ...getDefaultNameRandomizerSettings(), enabled: false };
   const flags = actor?.getFlag?.(MODULE_ID, "nameRandomizer") ?? actor?.flags?.[MODULE_ID]?.nameRandomizer;
   const defaults = getDefaultNameRandomizerSettings();
   if (!flags) return defaults;
@@ -702,6 +724,7 @@ function getDefaultNameRandomizerSettings() {
 }
 
 function getActorTreasureRandomizerSettings(actor) {
+  if (unsupportedActor(actor)) return { ...getDefaultTreasureRandomizerSettings(), enabled: false };
   const flags = actor?.getFlag?.(MODULE_ID, "treasureRandomizer") ?? actor?.flags?.[MODULE_ID]?.treasureRandomizer;
   const defaults = getDefaultTreasureRandomizerSettings();
   if (!flags) return defaults;
@@ -1735,8 +1758,7 @@ Hooks.on("getActorSheetHeaderButtons", (sheet, buttons) => {
   if (!game.user?.isGM) return;
 
   const actor = sheet.actor;
-  if (!actor) return;
-  if (!["character", "npc"].includes(actor.type)) return;
+  if (!isRandomizableActor(actor)) return;
   if (actor.isToken) return;
   if (actor.prototypeToken?.actorLink) return;
 
@@ -1754,7 +1776,7 @@ Hooks.on("getActorSheetHeaderButtons", (sheet, buttons) => {
 function updateRandomizerButtonColor(sheet) {
   if (!game.user?.isGM) return;
   const actor = sheet.actor;
-  if (!actor || actor.isToken) return;
+  if (!isRandomizableActor(actor) || actor.isToken) return;
   if (actor.prototypeToken?.actorLink) return;
 
   const randomizerActive = isAnyRandomizerEnabled(actor);
@@ -1783,6 +1805,9 @@ Hooks.on("createToken", async (tokenDoc, options, userId) => {
   if (game.userId !== userId) return;
   if (!game.user?.isGM) return;
   if (tokenDoc.actorLink) return;
+  // Vehicles, traps, haunts and the like never get a config button, so they must never
+  // be randomized off the world defaults either.
+  if (!isRandomizableActor(tokenDoc.actor)) return;
 
   // Skip if already randomized — region teleport recreates the token from
   // existing data (including this flag), which would otherwise re-randomize.

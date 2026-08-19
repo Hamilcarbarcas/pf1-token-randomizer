@@ -162,6 +162,7 @@ Replaces the actor's carried currency (pp/gp/sp/cp) with a freshly generated amo
 ## Notes & limitations
 
 - **Unlinked tokens only.** Linked tokens and the prototype actor are never modified.
+- **Character and NPC actors only.** Other PF1 actor types (vehicles, traps, haunts, basic actors) are skipped entirely — they get no *Randomizer* button and are never randomized off the world defaults.
 - **Treasure replaces, not adds.** Existing currency on the token is overwritten.
 - Randomization runs once per token. A token recreated by a scene/region teleport keeps its rolled values (tracked via a `randomized` token flag).
 - **Obscured names hide, they don't secure.** The substitution happens per client at display time; the real name is still synced to every client and readable via the console. Coverage is limited to chat headers, the combat tracker, and the on-hover canvas nameplate (gap-fill only) — other surfaces (third-party UIs, chat card bodies, and nameplates for tokens whose display mode already shows a name) still show the real name.
