@@ -1,6 +1,6 @@
 # PF1 Token Randomizer
 
-A Foundry VTT module for the **Pathfinder 1e** system that randomizes **ability scores**, **names**, and **carried treasure** for unlinked NPC tokens as they are dropped onto a scene. Configuration is per-actor (from the actor sheet).
+A Foundry VTT module for the **Pathfinder 1e** system that randomizes **ability scores**, **names**, **skill ranks**, and **carried treasure** for unlinked NPC tokens as they are dropped onto a scene. Configuration is per-actor (from the actor sheet).
 
 **Manifest URL:** `https://github.com/Hamilcarbarcas/pf1-token-randomizer/releases/latest/download/module.json`
 
@@ -12,11 +12,12 @@ A Foundry VTT module for the **Pathfinder 1e** system that randomizes **ability 
 ## Features
 
 - **Per-actor configuration.** A *Randomizer* button is added to the header of character and NPC sheets with unlinked tokens. Each actor stores its own settings. The button glows gold when any randomizer is active for that actor.
-- **Three independent randomizers**, each toggled on/off separately:
+- **Four independent randomizers**, each toggled on/off separately:
   - **Ability Scores** — generated from a chosen method, then fitted to per-ability min/max constraints with optional priority weighting.
   - **Name** — assembled from modular **segments** (database names, random adjectives, static text) joined left to right, with weighted filters.
+  - **Skills** — the actor's legal skill-rank budget dealt out over a weighted list of skills, with optional class-skill priority and reusable profiles.
   - **Treasure** — a gold-value formula converted into a pp/gp/sp/cp coin spread.
-- **World defaults.** A *Token Randomizer Defaults* menu (in module settings) sets the baseline applied to every new actor. A separate *Token Randomizer Lists* menu manages the name database and adjective lists, and a *Token Randomizer Stat Methods* menu adds custom ability-score arrays and dice formulas.
+- **World defaults.** A *Token Randomizer Defaults* menu (in module settings) sets the baseline applied to every new actor. A separate *Token Randomizer Lists* menu manages the name database and adjective lists, a *Token Randomizer Stat Methods* menu adds custom ability-score arrays and dice formulas, and *Skill Profiles* / *Subskill Groups* menus manage the skill randomizer's saved settings and speciality lists.
 - **Only touches unlinked tokens.** Linked tokens (which share the actor's real data) are never modified. Re-randomization is suppressed when a token is recreated by a scene/region teleport.
 - **Obscured NPC names** *(optional)*. Show players an alternate name for a token unless they have at least **Observer** permission on it — substituted in chat and the combat tracker. Configured per name component, with a per-token override. See [Obscured NPC names](#obscured-npc-names).
 
@@ -26,7 +27,7 @@ A Foundry VTT module for the **Pathfinder 1e** system that randomizes **ability 
 
 ### Configuring a single actor
 
-Open a character or NPC sheet with an unlinked token and click the **🎲 Randomizer** button in the window header. The dialog has three tabs — enable whichever randomizers you want, configure them, and click **Save**. Settings are stored on that actor. Use **Reset to Defaults** to copy the world default settings back into the dialog.
+Open a character or NPC sheet with an unlinked token and click the **🎲 Randomizer** button in the window header. The dialog has four tabs — enable whichever randomizers you want, configure them, and click **Save**. Settings are stored on that actor. Use **Reset to Defaults** to copy the world default settings back into the dialog.
 
 ### Setting world defaults
 
@@ -38,7 +39,7 @@ When an **unlinked** token is placed on a scene by a GM, each enabled randomizer
 
 ---
 
-## The three randomizers
+## The four randomizers
 
 ### Ability Scores
 
@@ -146,6 +147,94 @@ For linked or named tokens that don't go through the placement builder — or an
 
 > **This is a presentation-layer feature, not a security boundary.** The token's real name is still sent to every client, so a determined player can read it via the browser console. It hides the name in the normal interface, nothing more.
 
+### Skills
+
+Deals out skill ranks when the token is placed.
+
+#### How many ranks
+
+The budget is **the actor's own legal skill-point total** — there is nothing to type. It is worked out exactly the way the character sheet does: skill points per level from each class, plus the Intelligence modifier, times that class's hit dice, plus favoured-class skill picks and any skill-rank bonus. Racial hit dice count, so bestiary-style NPCs get a budget too. No skill may exceed **max ranks** (the actor's character level), same as on the sheet.
+
+The tab shows the figure for the actor you're editing (e.g. *"24 ranks · max 5 per skill"*). If it reads **0**, that actor carries no class items at all and nothing will be dealt out — give it a class (racial hit dice count) first.
+
+**Background skills.** If Pathfinder's *background skills* optional rule is switched on in the system settings, the readout splits — e.g. *"24 ranks + 8 background"* — and the two pools obey the rule's asymmetry. Background ranks are spent first and can only land on background skills; adventure ranks are spent afterwards and can go anywhere, background skills included. Background ranks with no background skill available to take them are simply lost, exactly as the rule intends. Note that five of the thirteen background skills are Craft, Perform, Profession, Art and Lore, which need a speciality (see below) before they can take ranks at all.
+
+#### Which skills — three groups, two knobs each
+
+Every skill that isn't excluded is a candidate. Which ones actually get ranks is decided by three groups, each with a **weight** and a **focus**:
+
+| Group | What it covers |
+| --- | --- |
+| **Skill list** | the skills you add by hand, each with its own weight |
+| **Class skills** | everything else the actor treats as a class skill |
+| **Other skills** | everything else |
+
+Each rank is dealt in **two steps**: first the three **weights** decide *which group* it goes to, then the group decides *which skill*.
+
+**Weight (0–10)** is the relative chance of a rank going to that group. Only ratios matter, so the default **5 / 5 / 1** sends about 45% of ranks to your list, 45% to class skills, and 9% to everything else. A weight of **0** does *not* mean never — it means **last resort**: that group is only drawn from once every group weighted 1 or more has run out of room.
+
+Once a group is chosen:
+
+- **Skill list** — the entry weights decide which **row**, so they're relative *only to each other*. A row at 8 gets four times the ranks of one at 2 in the same list, and never competes directly against a class skill. Entries always weigh at least 1, since adding one is a deliberate choice.
+- **Class skills** and **Other skills** — picked evenly at random. There's no per-skill weighting inside these; if you want a specific skill favoured, add it to the list.
+
+**A row is one row, however many skills it covers.** *Knowledge (any)* is a single entry even though it stands for ten skills, and a *Craft* entry is a single entry however many specialities you give it. So a list holding Knowledge (any), Craft (weaponsmithing, armorsmithing, bowmaking) and Perception — all at weight 5 — gives an equal chance of a Knowledge, a Craft, or Perception. Once a row is chosen, it picks one of its own skills: by their weights for a Craft entry's specialities, evenly for a Knowledge alias.
+
+The three weights cover the whole range of "how much do class skills matter":
+
+- **List 0, Class 10, Other 0** — every class skill fills to maximum before anything else scores a point.
+- **List 5, Class 5, Other 1** *(the default)* — your picks and class skills equally, with the occasional outlier.
+- **List 10, Class 1, Other 0** — almost everything goes to the skills you chose.
+- **List 0, Class 0, Other 5** — a deliberately off-book NPC.
+
+If the actor carries nothing (class, race or feat) declaring any class skills, the tab says so and the class row has nothing to act on.
+
+**Settling on a speciality.** A row covering several skills **narrows to the first one it picks**, and keeps it for the rest of that token. A Craft entry with three specialities becomes, say, *Craft (armorsmithing)* on the first rank it wins, and every later Craft rank goes there too — so you get one competent crafter rather than three dabblers. The same applies to a Craft or Profession that turns up through the Class or Other groups, drawing from the specialities the actor already has.
+
+A narrowed row only opens up another speciality if the character runs out of anywhere else to put ranks entirely — if some other skill still has room, the rank goes there instead.
+
+**Knowledge (any)** is the deliberate exception. Both pickers offer it (and **Knowledge (class skills)**, covering only the Knowledges that actor treats as class skills), covering the whole family in one row so you don't add or exclude them one at a time. It counts as a single entry when the list rolls, then picks one Knowledge at random — and unlike Craft it **never settles**, so a later rank can land on a different one. Focus still works on it: a rank landing on Knowledge (arcana) with focus set will keep filling *arcana*, because focus repeats the exact skill rather than the row. Excluding an alias excludes every skill it covers, and a specific Knowledge you list separately is claimed by its own row and dropped from the alias's, so it's never counted twice.
+
+**Focus (0–10)** is how much a group *concentrates*. After a rank is placed, focus is the chance the next rank goes into the same skill. At **0** every rank is an independent draw and ranks spread thin across many skills. At **10** a skill keeps taking ranks until it hits maximum before the draw moves on, giving deep, narrow spreads. In between you get runs of a few ranks at a time. Focus is read from the group the last rank came from, so you can have a tightly-focused hand-picked list alongside a broadly-spread remainder.
+
+#### Excluded skills
+
+Excluded skills are **never written to at all**. They can't receive ranks by any route — not from the list, not from either group — *and* they're skipped by the clear-out below, so they keep whatever ranks the statblock already had. If the only skills left with room are excluded, the remaining points simply go unspent. Excluding **Knowledge (any)** excludes all ten individually, and beats a Knowledge entry in the skill list — exclusion always wins.
+
+That's the difference between excluding a skill and setting its group's weight to 0: a 0-weight group is still a last-resort source of ranks, and its skills still get cleared; an excluded skill is untouchable either way.
+
+#### Clearing existing ranks
+
+**Clear existing ranks first** is **off by default**, so the rolled ranks are added on top of whatever the actor already has — a hand-built statblock keeps its ranks. Note that adding to an actor that already spent its skill points can push it past its legal total.
+
+Turn it **on** to zero every skill before dealing, so the result is the roll and nothing else — the right choice for a bare NPC you want fully generated. Either way, excluded skills are never cleared, and the max-ranks cap applies to the running total, so adding on top still can't take a skill past its maximum.
+
+If nothing in your configuration can actually receive a rank — an empty list with class skills switched off — the randomizer leaves the actor's skills completely untouched rather than clearing them.
+
+#### Craft, Perform, Profession, Art and Lore
+
+These five skills can't hold ranks on their own row in Pathfinder 1e; their ranks live in individual specialities (*Craft (weapons)*, *Perform (dance)*). Adding one to the **skill list** makes you name at least one speciality for it. Each is matched to an existing one on the actor **by name**, or created if it isn't there — and only if it actually draws ranks, so a zero roll won't litter the sheet with empty rows.
+
+They can also turn up through the **Class skills** and **Other skills** groups, but only using specialities the actor **already has** — the randomizer won't invent *Profession (siege engineer)* on a skill it merely happened to roll. A Craft or Profession with no specialities on the sheet is simply skipped by those groups.
+
+Rather than naming every speciality by hand on every actor, you can define a **group**: a named set of specialities under one skill, from which **one member is drawn at random per token**. For example, a *Smithing* group under Craft holding *Weaponsmithing*, *Armorsmithing* and *Blacksmithing* gives each guard one of the three. The group's weight competes with the other rows; members within it are drawn evenly. Two group rows under the same skill try not to land on the same member.
+
+Groups are defined under **Game Settings → Configure Settings → PF1 Token Randomizer → Manage Subskill Groups** — give each a name and pick which of the five skills it belongs to, then click **Select Items** to choose its specialities: a checkbox list of that skill's autocomplete entries, plus a **Custom Entries** field at the bottom for anything not on it. The group's specialities show underneath as chips you can remove individually, and the chevron collapses that list. A group belongs to a single skill, so a Craft group is only offered on Craft entries. Deleting a group leaves any setting that used it showing *(unavailable)* rather than silently changing.
+
+The **Autocomplete Lists** section at the top of that window is where those specialities come from: one row per skill, entered the same way as the system's damage vulnerabilities and immunities — type a name, press **Enter**, and it becomes a chip you can remove with its ×. These feed both the Select Items checkboxes and the suggestions offered as you type a speciality name in the Skills tab; you can always type something that isn't on the list.
+
+The window opens with every list and group collapsed, each showing its member count — click a chevron to expand one. The entry field stays usable while a list is collapsed, so you can keep adding without expanding it. A group you add is expanded from the start.
+
+Four of the five come pre-filled: **Artistry** (6), **Craft** (22), **Perform** (10) and **Profession** (25). **Lore** ships empty, since its specialities are campaign-specific. Edit them freely — the shipped lists are only used to fill a skill whose list is empty, and never overwrite one you've changed. **Restore defaults** puts the original lists back.
+
+#### Profiles
+
+A **profile** is a named snapshot of the whole Skills tab that you can drop onto any actor. Save one with **Save as Profile…** from either an actor's dialog or Configure Defaults; load one from the dropdown at the top of the tab.
+
+Loading **copies** the settings in — it does not create a live link. Editing or deleting a profile later never reaches back into actors already configured from it. The tab shows which profile a config came from, and marks it *(modified)* once you change anything.
+
+Profiles can be created from either dialog, but can only be **renamed, reordered or deleted** under **Game Settings → Configure Settings → PF1 Token Randomizer → Manage Skill Profiles**. To change what a profile *contains*, load it in Configure Defaults, edit it, and save it again under the same name.
+
 ### Treasure
 
 ![Treasure tab](assets/Randomizer%20-%20Treasure.png)
@@ -164,6 +253,8 @@ Replaces the actor's carried currency (pp/gp/sp/cp) with a freshly generated amo
 - **Unlinked tokens only.** Linked tokens and the prototype actor are never modified.
 - **Character and NPC actors only.** Other PF1 actor types (vehicles, traps, haunts, basic actors) are skipped entirely — they get no *Randomizer* button and are never randomized off the world defaults.
 - **Treasure replaces, not adds.** Existing currency on the token is overwritten.
+- **Skills run after ability scores**, because the rank budget depends on Intelligence — so a randomized Int feeds the number of ranks dealt.
+- **Skill limitations.** Per-actor custom skills (ones you added yourself with the ＋ button on the skills tab) are never listed, never dealt ranks, and never cleared.
 - Randomization runs once per token. A token recreated by a scene/region teleport keeps its rolled values (tracked via a `randomized` token flag).
 - **Obscured names hide, they don't secure.** The substitution happens per client at display time; the real name is still synced to every client and readable via the console. Coverage is limited to chat headers, the combat tracker, and the on-hover canvas nameplate (gap-fill only) — other surfaces (third-party UIs, chat card bodies, and nameplates for tokens whose display mode already shows a name) still show the real name.
 
@@ -180,7 +271,28 @@ tr.getDisplayName(tokenDoc, user = game.user);      // obscured name if the gate
 tr.getSpeakerDisplayName(speaker, user = game.user); // same, resolved from a ChatMessage speaker (falls back to alias)
 tr.shouldObscure(tokenDoc, user = game.user);       // boolean: is the obscure gate active for this user?
 tr.getObscuredName(tokenDoc);                        // the raw stored obscured name, or ""
+
+tr.computeSkillBudget(actor);            // { adventure, background, total }
+tr.skillRankCap(actor);                  // max ranks in any one skill (character level)
+tr.buildSkillSlots(actor, settings);     // the rows a config produces, and their members
 ```
+
+### Adjusting the rank budget
+
+Pathfinder offers no *background*-specific Change target, so a module granting a free background rank has to route it through `bonusSkillRanks` — which lands in `system.details.skills.bonus`, the **adventure** pool. A module doing that typically patches its own sheet display to re-pool the rank, but this module reads actor data rather than the sheet, and would otherwise spend it on an adventure skill.
+
+The `pf1TokenRandomizerSkillBudget` hook lets such a module correct the split. Listeners mutate the budget in place; the result is floored and clamped at zero afterwards, so a bad listener can't produce a negative or fractional budget.
+
+```js
+Hooks.on("pf1TokenRandomizerSkillBudget", (actor, budget) => {
+  if (!grantedMyFreeBackgroundRank(actor)) return;
+  if (budget.adventure < 1) return;
+  budget.adventure -= 1;   // move it out of the pool PF1 put it in…
+  budget.background += 1;  // …and into the one the house rule means
+});
+```
+
+The hook fires wherever the budget is calculated, so the figure shown in the Skills tab matches what actually gets dealt.
 
 All routes funnel through the same `shouldObscure` gate the UI substitutions use (feature enabled + token opted in + non-empty obscured name + user lacks Observer). GMs always hold Observer, so they always get the real name. As with the display features, this is presentation-layer only — the real name is still synced to every client.
 

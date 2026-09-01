@@ -1,3 +1,5 @@
 module.zip
 *.log
 .DS_Store
+DESIGN.md
+README-EDITS.md

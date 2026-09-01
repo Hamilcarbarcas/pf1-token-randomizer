@@ -1,0 +1,83 @@
+<div class="token-randomizer-subskill-groups">
+
+  {{!-- Autocomplete lists first: they feed the Select Items picker below. --}}
+  <div class="settings-section">
+    <div class="known-head">
+      <h3>{{localize "TR.SubSkillGroup.KnownTitle"}}</h3>
+      <button type="button" class="known-restore" data-action="restoreKnown" title="{{localize "TR.SubSkillGroup.RestoreTitle"}}">
+        <i class="fas fa-rotate-left"></i> {{localize "TR.SubSkillGroup.Restore"}}
+      </button>
+    </div>
+    <p class="hint">{{{localize "TR.SubSkillGroup.KnownIntro"}}}</p>
+    <div class="known-list">
+      {{#each known}}
+      <div class="known-block {{#if collapsed}}collapsed{{/if}}">
+        <div class="known-block-head">
+          <button type="button" class="tr-collapse-btn" data-action="toggleKnown" data-skill="{{key}}" title="{{localize "TR.Box.ToggleTitle"}}"><i class="fas fa-chevron-down"></i></button>
+          <span class="known-label">{{label}}</span>
+          <input type="text" class="known-input" data-skill="{{key}}" placeholder="{{localize "TR.SubSkillGroup.KnownPlaceholder"}}" />
+          <span class="known-count">{{localize "TR.SubSkillGroup.Count" count=count}}</span>
+        </div>
+        <div class="skill-chips">
+          {{#each names}}
+          <span class="skill-chip">
+            {{this}}
+            <button type="button" class="skill-chip-delete" data-action="removeKnown" data-skill="{{../key}}" data-name="{{this}}" title="{{localize "TR.SubSkillGroup.RemoveEntry"}}"><i class="fas fa-times"></i></button>
+          </span>
+          {{else}}
+          <span class="hint">{{localize "TR.SubSkillGroup.NoEntries"}}</span>
+          {{/each}}
+        </div>
+      </div>
+      {{/each}}
+    </div>
+  </div>
+
+  {{!-- Groups draw their members from the lists above. --}}
+  <div class="settings-section">
+    <h3>{{localize "TR.SubSkillGroup.Title"}}</h3>
+    <p class="hint">{{{localize "TR.SubSkillGroup.Intro"}}}</p>
+
+    <div class="group-list">
+      {{#each groups}}
+      <div class="group-item {{#if collapsed}}collapsed{{/if}}" data-index="{{index}}">
+        <div class="group-item-head">
+          <button type="button" class="tr-collapse-btn" data-action="toggleGroup" data-id="{{id}}" title="{{localize "TR.Box.ToggleTitle"}}"><i class="fas fa-chevron-down"></i></button>
+          <input type="text" class="group-name" data-index="{{index}}" value="{{name}}" placeholder="{{localize "TR.SubSkillGroup.NamePlaceholder"}}" />
+          <select class="group-skill" data-index="{{index}}">
+            {{#each skillOptions}}<option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}
+          </select>
+          <button type="button" class="group-select-btn" data-action="selectItems" data-index="{{index}}" title="{{localize "TR.SubSkillGroup.SelectTitle"}}">
+            <i class="fas fa-check-double"></i> {{localize "TR.SubSkillGroup.Select"}}
+          </button>
+          <button type="button" class="segment-btn segment-btn-danger" data-action="removeGroup" data-index="{{index}}" title="{{localize "TR.SubSkillGroup.DeleteTitle"}}"><i class="fas fa-trash"></i></button>
+        </div>
+        <div class="skill-chips">
+          {{#each members}}
+          <span class="skill-chip">
+            {{this}}
+            <button type="button" class="skill-chip-delete" data-action="removeMember" data-index="{{../index}}" data-name="{{this}}" title="{{localize "TR.SubSkillGroup.RemoveEntry"}}"><i class="fas fa-times"></i></button>
+          </span>
+          {{else}}
+          <span class="hint">{{localize "TR.SubSkillGroup.NoMembers"}}</span>
+          {{/each}}
+        </div>
+        <p class="hint group-count">{{localize "TR.SubSkillGroup.Count" count=count}}</p>
+      </div>
+      {{else}}
+      <p class="hint no-methods-hint">{{localize "TR.SubSkillGroup.NoGroups"}}</p>
+      {{/each}}
+    </div>
+
+    <div class="group-add-row">
+      <button type="button" class="segment-add-btn" data-action="addGroup"><strong class="add-plus">+</strong> <i class="fas fa-layer-group"></i> {{localize "TR.SubSkillGroup.AddGroup"}}</button>
+    </div>
+  </div>
+
+  <div class="settings-actions">
+    <div class="action-buttons">
+      <button type="button" class="settings-cancel-btn" data-action="cancel">{{localize "TR.Action.Cancel"}}</button>
+      <button type="button" class="settings-ok-btn" data-action="save">{{localize "TR.Action.Save"}}</button>
+    </div>
+  </div>
+</div>

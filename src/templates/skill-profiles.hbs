@@ -1,0 +1,32 @@
+<div class="token-randomizer-skill-profiles">
+  <div class="settings-section">
+    <h3>{{localize "TR.SkillProfile.Title"}}</h3>
+    <p class="hint">{{{localize "TR.SkillProfile.Intro"}}}</p>
+
+    <div class="skill-profile-list">
+      {{#each profiles}}
+      <div class="skill-profile-item" data-index="{{index}}">
+        <div class="skill-profile-item-head">
+          <input type="text" class="skill-profile-name" data-index="{{index}}" value="{{name}}" placeholder="{{localize "TR.SkillProfile.NamePlaceholder"}}" />
+          <div class="skill-profile-controls">
+            <button type="button" class="segment-btn" data-action="moveProfileUp" data-index="{{index}}" title="{{localize "TR.Segment.MoveUp"}}" {{#if isFirst}}disabled{{/if}}><i class="fas fa-chevron-up"></i></button>
+            <button type="button" class="segment-btn" data-action="moveProfileDown" data-index="{{index}}" title="{{localize "TR.Segment.MoveDown"}}" {{#if isLast}}disabled{{/if}}><i class="fas fa-chevron-down"></i></button>
+            <button type="button" class="segment-btn segment-btn-danger" data-action="removeProfile" data-index="{{index}}" title="{{localize "TR.SkillProfile.DeleteTitle"}}"><i class="fas fa-trash"></i></button>
+          </div>
+        </div>
+        <p class="hint skill-profile-summary">{{summary}}</p>
+        {{#if skills}}<p class="hint skill-profile-skills">{{skills}}</p>{{/if}}
+      </div>
+      {{else}}
+      <p class="hint no-methods-hint">{{localize "TR.SkillProfile.NoProfiles"}}</p>
+      {{/each}}
+    </div>
+  </div>
+
+  <div class="settings-actions">
+    <div class="action-buttons">
+      <button type="button" class="settings-cancel-btn" data-action="cancel">{{localize "TR.Action.Cancel"}}</button>
+      <button type="button" class="settings-ok-btn" data-action="save">{{localize "TR.Action.Save"}}</button>
+    </div>
+  </div>
+</div>

@@ -1,7 +1,7 @@
 {
   "id": "pf1-token-randomizer",
   "title": "PF1 Token Randomizer",
-  "description": "Randomize ability scores, names, and carried treasure for unlinked tokens as they are placed on a scene. Configured per-actor from the character sheet.",
+  "description": "Randomize ability scores, names, skill ranks, and carried treasure for unlinked tokens as they are placed on a scene. Configured per-actor from the character sheet.",
   "authors": [
     {
       "name": "Hamilcarbarcas",

@@ -8,6 +8,9 @@
     <button type="button" class="randomizer-tab-btn {{#if (eq activeTab 'name')}}active{{/if}}" data-action="switchTab" data-tab="name">
       <i class="fas fa-signature"></i> {{localize "TR.Tab.Name"}}
     </button>
+    <button type="button" class="randomizer-tab-btn {{#if (eq activeTab 'skills')}}active{{/if}}" data-action="switchTab" data-tab="skills">
+      <i class="fas fa-book"></i> {{localize "TR.Tab.Skills"}}
+    </button>
     <button type="button" class="randomizer-tab-btn {{#if (eq activeTab 'treasure')}}active{{/if}}" data-action="switchTab" data-tab="treasure">
       <i class="fas fa-coins"></i> {{localize "TR.Tab.Treasure"}}
     </button>
@@ -104,15 +107,15 @@
       {{/if}}
 
       {{!-- Name components (ordered, collapsible) --}}
-      <div class="name-components-box">
-        <div class="components-box-header">
-          <span class="components-box-title">{{localize "TR.Name.Components"}}</span>
-          {{#if nameSegments.length}}
-          <button type="button" class="components-clear-btn" data-action="clearSegments" title="{{localize "TR.Name.ClearTitle"}}">
-            <i class="fas fa-trash"></i> {{localize "TR.Name.Clear"}}
-          </button>
-          {{/if}}
+      <div class="tr-box name-components-box {{#if nameComponentsCollapsed}}collapsed{{/if}}">
+        <div class="tr-box-header" data-action="toggleBox" data-box="name-components" title="{{localize "TR.Box.ToggleTitle"}}">
+          <span class="tr-box-title">
+            <i class="fas fa-chevron-down tr-box-indicator"></i>
+            <i class="fas fa-puzzle-piece"></i> {{localize "TR.Name.Components"}}
+          </span>
+          <span class="tr-box-badge">{{nameSegments.length}}</span>
         </div>
+        <div class="tr-box-body">
         <div class="name-segments">
         {{#each nameSegments}}
         <div class="name-segment {{#if collapsed}}collapsed{{/if}} {{#unless hasBody}}no-body{{/unless}}">
@@ -228,11 +231,219 @@
           <button type="button" class="segment-add-btn" data-action="addSegment" data-type="actor"><strong class="add-plus">+</strong> <i class="fas fa-user"></i> {{localize "TR.Segment.ActorName"}}</button>
           <button type="button" class="segment-add-btn" data-action="addSegment" data-type="static"><strong class="add-plus">+</strong> <i class="fas fa-font"></i> {{localize "TR.Segment.Static"}}</button>
         </div>
+        {{#if nameSegments.length}}
+        <button type="button" class="components-clear-btn" data-action="clearSegments" title="{{localize "TR.Name.ClearTitle"}}">
+          <i class="fas fa-trash"></i> {{localize "TR.Name.Clear"}}
+        </button>
+        {{/if}}
+        </div>
       </div>
     </div>
 
     <div class="settings-section name-database-section">
       <p class="hint">{{{localize "TR.Name.DbInfo" count=nameCount given=givenCount surname=surnameCount}}}</p>
+    </div>
+  </div>
+  {{/if}}
+
+  {{!-- ═══════════ Skills Tab ═══════════ --}}
+  {{#if (eq activeTab "skills")}}
+  <div class="tab-content">
+    <div class="settings-section">
+      <div class="setting-row enable-row">
+        <label>
+          <input type="checkbox" class="skill-enabled" {{#if skillEnabled}}checked{{/if}} />
+          <span>{{localize "TR.Skill.EnableRandomization"}}</span>
+        </label>
+      </div>
+      <p class="hint">{{localize "TR.Skill.EnableHint"}}</p>
+    </div>
+
+    {{!-- Profiles + budget: one compact header block --}}
+    <div class="settings-section skill-top-section {{#unless skillEnabled}}disabled{{/unless}}">
+      <div class="skill-profile-row">
+        <select class="skill-profile-select" {{#unless skillProfilesUsable}}disabled{{/unless}}>
+          {{#if skillHasProfiles}}
+          <option value="">{{localize "TR.Skill.ProfileChoose"}}</option>
+          {{#each skillProfiles}}<option value="{{id}}">{{name}}</option>{{/each}}
+          {{else}}
+          <option value="">{{localize "TR.Skill.ProfileNone"}}</option>
+          {{/if}}
+        </select>
+        <button type="button" class="skill-profile-btn" data-action="loadSkillProfile" title="{{localize "TR.Skill.ProfileLoadTitle"}}" {{#unless skillProfilesUsable}}disabled{{/unless}}>
+          <i class="fas fa-download"></i> {{localize "TR.Skill.ProfileLoad"}}
+        </button>
+        <button type="button" class="skill-profile-btn" data-action="saveSkillProfile" title="{{localize "TR.Skill.ProfileSaveTitle"}}" {{#unless skillEnabled}}disabled{{/unless}}>
+          <i class="fas fa-floppy-disk"></i> {{localize "TR.Skill.ProfileSave"}}
+        </button>
+      </div>
+      {{#if skillProfileName}}
+      <p class="hint skill-profile-source">
+        {{#if skillProfileModified}}{{localize "TR.Skill.ProfileFromModified" name=skillProfileName}}{{else}}{{localize "TR.Skill.ProfileFrom" name=skillProfileName}}{{/if}}
+      </p>
+      {{/if}}
+
+      <p class="skill-budget-readout {{#if skillBudgetZero}}skill-budget-zero{{/if}}">{{skillBudgetLabel}}</p>
+      {{#if skillBudgetZero}}<p class="hint">{{localize "TR.Skill.BudgetZeroHint"}}</p>{{/if}}
+      {{#if skillUseBackground}}<p class="hint">{{localize "TR.Skill.BackgroundHint"}}</p>{{/if}}
+    </div>
+
+    {{!-- Weight + focus per group, one row each --}}
+    <div class="settings-section skill-groups-section {{#unless skillEnabled}}disabled{{/unless}}">
+      <div class="skill-group-grid">
+        <span class="skill-group-head"></span>
+        <span class="skill-group-head">{{localize "TR.Skill.ColWeight"}}</span>
+        <span class="skill-group-head">{{localize "TR.Skill.ColFocus"}}</span>
+
+        <span class="skill-group-label">{{localize "TR.Skill.GroupList"}}</span>
+        <div class="weight-group">
+          <input type="range" class="skill-list-weight" min="0" max="10" value="{{skillListWeight}}" {{#unless skillEnabled}}disabled{{/unless}} />
+          <span class="weight-value">{{skillListWeight}}</span>
+        </div>
+        <div class="weight-group">
+          <input type="range" class="skill-focus" data-group="list" min="0" max="10" value="{{skillFocusList}}" {{#unless skillEnabled}}disabled{{/unless}} />
+          <span class="weight-value">{{skillFocusList}}</span>
+        </div>
+
+        <span class="skill-group-label">{{localize "TR.Skill.GroupClass"}}</span>
+        <div class="weight-group">
+          <input type="range" class="skill-class-weight" min="0" max="10" value="{{skillClassWeight}}" {{#unless skillEnabled}}disabled{{/unless}} />
+          <span class="weight-value">{{skillClassWeight}}</span>
+        </div>
+        <div class="weight-group">
+          <input type="range" class="skill-focus" data-group="class" min="0" max="10" value="{{skillFocusClass}}" {{#unless skillEnabled}}disabled{{/unless}} />
+          <span class="weight-value">{{skillFocusClass}}</span>
+        </div>
+
+        <span class="skill-group-label">{{localize "TR.Skill.GroupNonClass"}}</span>
+        <div class="weight-group">
+          <input type="range" class="skill-nonclass-weight" min="0" max="10" value="{{skillNonClassWeight}}" {{#unless skillEnabled}}disabled{{/unless}} />
+          <span class="weight-value">{{skillNonClassWeight}}</span>
+        </div>
+        <div class="weight-group">
+          <input type="range" class="skill-focus" data-group="nonClass" min="0" max="10" value="{{skillFocusNonClass}}" {{#unless skillEnabled}}disabled{{/unless}} />
+          <span class="weight-value">{{skillFocusNonClass}}</span>
+        </div>
+      </div>
+      <p class="hint">{{{localize "TR.Skill.GroupsHint"}}}</p>
+      {{#if skillNoClassSkills}}<p class="hint skill-warning">{{localize "TR.Skill.NoClassSkills"}}</p>{{/if}}
+    </div>
+
+    {{!-- Skill list (framed, collapsible) --}}
+    <div class="tr-box {{#if skillListCollapsed}}collapsed{{/if}} {{#unless skillEnabled}}disabled{{/unless}}">
+      <div class="tr-box-header" data-action="toggleBox" data-box="skill-list" title="{{localize "TR.Box.ToggleTitle"}}">
+        <span class="tr-box-title">
+          <i class="fas fa-chevron-down tr-box-indicator"></i>
+          <i class="fas fa-list-ol"></i> {{localize "TR.Skill.List"}}
+        </span>
+        <span class="tr-box-badge">{{skillEntries.length}}</span>
+      </div>
+      <div class="tr-box-body">
+        <p class="hint">{{localize "TR.Skill.ListHint"}}</p>
+        <div class="skill-entries">
+          {{#each skillEntries}}
+          <div class="skill-entry {{#if isArbitrary}}skill-entry-arbitrary{{/if}} {{#if needsSubSkills}}skill-entry-invalid{{/if}}">
+            <div class="skill-entry-header">
+              <span class="skill-entry-name">
+                {{label}}
+                {{#if isAlias}}<span class="skill-alias-count" title="{{localize "TR.Skill.AliasTitle"}}">{{#if aliasUnknownCount}}×?{{else}}×{{aliasCount}}{{/if}}</span>{{/if}}
+                {{#if isClassSkill}}<abbr class="skill-cs-badge" title="{{localize "TR.Skill.IsClassSkill"}}">{{localize "TR.Skill.CS"}}</abbr>{{/if}}
+              </span>
+              {{#unless isArbitrary}}
+              <div class="weight-group">
+                <input type="range" class="skill-weight" data-entry="{{index}}" min="1" max="10" value="{{weight}}" {{#unless ../skillEnabled}}disabled{{/unless}} />
+                <span class="weight-value">{{weight}}</span>
+              </div>
+              {{/unless}}
+              <button type="button" class="skill-entry-delete" data-action="removeSkillEntry" data-entry="{{index}}" title="{{localize "TR.Skill.Remove"}}"><i class="fas fa-times"></i></button>
+            </div>
+
+            {{#if isArbitrary}}
+            <div class="subskill-list">
+              {{#if known.length}}
+              <datalist id="{{knownId}}">{{#each known}}<option value="{{this}}"></option>{{/each}}</datalist>
+              {{/if}}
+              {{#each subSkills}}
+              <div class="subskill-entry {{#if isGroup}}subskill-entry-group{{/if}} {{#if groupMissing}}subskill-entry-invalid{{/if}}">
+                {{#if isGroup}}
+                <span class="subskill-kind" title="{{localize "TR.Skill.GroupTitle"}}"><i class="fas fa-layer-group"></i></span>
+                <select class="subskill-group" data-entry="{{../index}}" data-sub="{{index}}" {{#unless ../../skillEnabled}}disabled{{/unless}}>
+                  {{#each groupOptions}}<option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}
+                </select>
+                {{else}}
+                <input type="text" class="subskill-name" list="{{../knownId}}" data-entry="{{../index}}" data-sub="{{index}}" value="{{name}}" placeholder="{{localize "TR.Skill.SubSkillPlaceholder"}}" {{#unless ../../skillEnabled}}disabled{{/unless}} />
+                {{/if}}
+                <div class="weight-group">
+                  <input type="range" class="subskill-weight" data-entry="{{../index}}" data-sub="{{index}}" min="1" max="10" value="{{weight}}" {{#unless ../../skillEnabled}}disabled{{/unless}} />
+                  <span class="weight-value">{{weight}}</span>
+                </div>
+                <button type="button" class="subskill-delete" data-action="removeSubSkill" data-entry="{{../index}}" data-sub="{{index}}" title="{{localize "TR.Skill.SubSkillRemove"}}"><i class="fas fa-times"></i></button>
+              </div>
+              {{/each}}
+              <div class="subskill-add-row">
+                <button type="button" class="subskill-add" data-action="addSubSkill" data-kind="name" data-entry="{{index}}" {{#unless ../skillEnabled}}disabled{{/unless}}><i class="fas fa-plus"></i> {{localize "TR.Skill.SubSkillAdd"}}</button>
+                {{#if hasGroups}}
+                <button type="button" class="subskill-add" data-action="addSubSkill" data-kind="group" data-entry="{{index}}" {{#unless ../skillEnabled}}disabled{{/unless}}><i class="fas fa-plus"></i> {{localize "TR.Skill.SubSkillAddGroup"}}</button>
+                {{/if}}
+              </div>
+              {{#if needsSubSkills}}<p class="hint skill-warning">{{localize "TR.Skill.SubSkillRequired"}}</p>{{/if}}
+            </div>
+            {{/if}}
+          </div>
+          {{else}}
+          <p class="hint no-segments-hint">{{localize "TR.Skill.NoEntries"}}</p>
+          {{/each}}
+        </div>
+
+        <div class="skill-add-row">
+          <label>{{localize "TR.Skill.Add"}}</label>
+          <select class="skill-add-select" {{#unless skillEnabled}}disabled{{/unless}}>
+            <option value="">{{localize "TR.Skill.AddChoose"}}</option>
+            {{#each skillAddOptions}}<option value="{{value}}">{{label}}</option>{{/each}}
+          </select>
+        </div>
+      </div>
+    </div>
+
+    {{!-- Excluded skills (framed, collapsible) --}}
+    <div class="tr-box {{#if skillExcludedCollapsed}}collapsed{{/if}} {{#unless skillEnabled}}disabled{{/unless}}">
+      <div class="tr-box-header" data-action="toggleBox" data-box="skill-excluded" title="{{localize "TR.Box.ToggleTitle"}}">
+        <span class="tr-box-title">
+          <i class="fas fa-chevron-down tr-box-indicator"></i>
+          <i class="fas fa-ban"></i> {{localize "TR.Skill.Excluded"}}
+        </span>
+        <span class="tr-box-badge">{{skillExcluded.length}}</span>
+      </div>
+      <div class="tr-box-body">
+        <p class="hint">{{localize "TR.Skill.ExcludedHint"}}</p>
+        <div class="skill-chips">
+          {{#each skillExcluded}}
+          <span class="skill-chip">
+            {{label}}
+            <button type="button" class="skill-chip-delete" data-action="removeExcludedSkill" data-key="{{key}}" title="{{localize "TR.Skill.ExcludedRemove"}}"><i class="fas fa-times"></i></button>
+          </span>
+          {{else}}
+          <span class="hint">{{localize "TR.Skill.NoExclusions"}}</span>
+          {{/each}}
+        </div>
+        <div class="skill-add-row">
+          <label>{{localize "TR.Skill.ExcludedAdd"}}</label>
+          <select class="skill-exclude-select" {{#unless skillEnabled}}disabled{{/unless}}>
+            <option value="">{{localize "TR.Skill.AddChoose"}}</option>
+            {{#each skillExcludeOptions}}<option value="{{value}}">{{label}}</option>{{/each}}
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-section skill-wipe-section {{#unless skillEnabled}}disabled{{/unless}}">
+      <div class="setting-row">
+        <label>
+          <input type="checkbox" class="skill-wipe-existing" {{#if skillWipeExisting}}checked{{/if}} {{#unless skillEnabled}}disabled{{/unless}} />
+          <span>{{localize "TR.Skill.WipeExisting"}}</span>
+        </label>
+      </div>
+      <p class="hint">{{localize "TR.Skill.WipeExistingHint"}}</p>
     </div>
   </div>
   {{/if}}

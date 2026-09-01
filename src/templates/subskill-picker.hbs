@@ -1,0 +1,42 @@
+<div class="token-randomizer-subskill-picker">
+  <div class="settings-section">
+    <p class="hint">{{localize "TR.SubSkillPicker.Intro" skill=skillLabel}}</p>
+
+    {{#if hasKnown}}
+    <div class="picker-grid">
+      {{#each known}}
+      <label class="picker-item">
+        <input type="checkbox" class="picker-known" data-name="{{name}}" {{#if checked}}checked{{/if}} />
+        <span>{{name}}</span>
+      </label>
+      {{/each}}
+    </div>
+    {{else}}
+    <p class="hint">{{localize "TR.SubSkillPicker.NoKnown"}}</p>
+    {{/if}}
+  </div>
+
+  <div class="settings-section">
+    <h3>{{localize "TR.SubSkillPicker.CustomTitle"}}</h3>
+    <p class="hint">{{localize "TR.SubSkillPicker.CustomHint"}}</p>
+    <input type="text" class="picker-custom-input" placeholder="{{localize "TR.SubSkillGroup.KnownPlaceholder"}}" />
+    <div class="skill-chips">
+      {{#each custom}}
+      <span class="skill-chip">
+        {{this}}
+        <button type="button" class="skill-chip-delete" data-action="removeCustom" data-name="{{this}}" title="{{localize "TR.SubSkillGroup.RemoveEntry"}}"><i class="fas fa-times"></i></button>
+      </span>
+      {{else}}
+      <span class="hint">{{localize "TR.SubSkillGroup.NoEntries"}}</span>
+      {{/each}}
+    </div>
+  </div>
+
+  <div class="settings-actions">
+    <span class="picker-count">{{localize "TR.SubSkillPicker.Count" count=count}}</span>
+    <div class="action-buttons">
+      <button type="button" class="settings-cancel-btn" data-action="cancel">{{localize "TR.Action.Cancel"}}</button>
+      <button type="button" class="settings-ok-btn" data-action="submit">{{localize "TR.Action.Save"}}</button>
+    </div>
+  </div>
+</div>

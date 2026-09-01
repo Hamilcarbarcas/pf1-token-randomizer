@@ -631,6 +631,596 @@ function distributionToCoins(goldValue, props) {
   return coins;
 }
 
+// ─── Skill Logic ───────────────────────────────────────────────────────────────
+// Distributes skill ranks over a weighted pool, within the actor's legal rank budget
+// and the per-skill cap. See DESIGN.md §2 (system internals) and §4 (the model).
+
+const DEFAULT_SKILL_WEIGHT = 5;
+
+// Out of the box: mostly class skills with the occasional non-class one, spread evenly.
+// Both group weights are meaningful at 0 — see DESIGN.md §4.2 for the tier rule.
+const SKILL_DEFAULTS = {
+  enabled: false,
+  entries: [],
+  // Category weights (DESIGN.md §4.4). The hand-picked list and class skills are equally
+  // likely; everything else is an occasional outlier.
+  listWeight: 5,
+  classWeight: 5,
+  nonClassWeight: 1,
+  focus: { list: 0, class: 0, nonClass: 0 },
+  excluded: [],
+  // Off by default: a statblock's existing ranks are hand-authored data, so the
+  // randomizer adds to them rather than destroying them unless explicitly told to.
+  wipeExisting: false,
+  profile: null
+};
+
+// Skills that cannot hold ranks on their parent row: the system always gives them a
+// subSkills object, the sheet omits their rank input, and the rank accounting reads
+// only their subskills. They never enter the pool implicitly — only as an explicit
+// entry naming its subskills (DESIGN.md §4.8).
+const FALLBACK_ARBITRARY_SKILLS = ["art", "crf", "lor", "prf", "pro"];
+
+// ─── Skill aliases ───────────────────────────────────────────────────────────────
+// A pseudo-key standing for a set of real skills, so "Knowledge (any)" is one row in
+// the list (and one chip in the exclusions) instead of ten. The `*` prefix cannot
+// collide with a real key: the system's are three lowercase letters.
+//
+// PF1 exposes no grouping for the Knowledge skills — they are only recognisable by
+// sharing a compendium journal page — so the members are listed explicitly here.
+const KNOWLEDGE_SKILLS = ["kar", "kdu", "ken", "kge", "khi", "klo", "kna", "kno", "kpl", "kre"];
+
+const SKILL_ALIASES = {
+  "*knowledge": { label: "TR.Skill.KnowledgeAny", keys: KNOWLEDGE_SKILLS },
+  // Same family, narrowed to whatever this actor treats as a class skill. Resolves to
+  // nothing in the defaults dialog, where there is no actor to ask.
+  "*knowledgeClass": { label: "TR.Skill.KnowledgeClass", keys: KNOWLEDGE_SKILLS, classOnly: true }
+};
+
+function isSkillAlias(key) {
+  return Object.hasOwn(SKILL_ALIASES, key);
+}
+
+/**
+ * The real skill keys an alias covers: those the system defines, and — for a `classOnly`
+ * alias — those this actor marks as class skills.
+ */
+function aliasSkillKeys(key, actor = null) {
+  const alias = SKILL_ALIASES[key];
+  if (!alias) return [];
+  const registry = getSkillRegistry();
+  const skills = actor?.system?.skills ?? {};
+  return alias.keys.filter(k => registry[k] && (!alias.classOnly || skills[k]?.cs));
+}
+
+/**
+ * Expand any aliases in an exclusion list to the real keys they cover, so every
+ * exclusion check is a plain key lookup. Exclusion is absolute, so an excluded alias
+ * vetoes each of its members individually too.
+ */
+function expandExcludedSkills(excluded, actor = null) {
+  const out = new Set();
+  for (const key of excluded ?? []) {
+    if (isSkillAlias(key)) for (const k of aliasSkillKeys(key, actor)) out.add(k);
+    else out.add(key);
+  }
+  return out;
+}
+
+/** The system's skill registry (key → i18n label), read live so added skills are seen. */
+function getSkillRegistry() {
+  return pf1?.config?.skills ?? {};
+}
+
+function isArbitrarySkill(key) {
+  return (pf1?.config?.arbitrarySkills ?? FALLBACK_ARBITRARY_SKILLS).includes(key);
+}
+
+/** Localized label for a skill key or alias, falling back to the raw key. */
+function skillLabel(key) {
+  const label = SKILL_ALIASES[key]?.label ?? getSkillRegistry()[key];
+  return label ? game.i18n.localize(label) : key;
+}
+
+/** List-entry weights floor at 1: a hand-added skill is never a fallback (DESIGN.md §4.2). */
+function clampSkillWeight(value) {
+  const n = parseInt(value, 10);
+  if (!Number.isFinite(n)) return DEFAULT_SKILL_WEIGHT;
+  return Math.max(1, Math.min(10, n));
+}
+
+/**
+ * Group weights and focus sliders run 0–10, where 0 carries its own meaning (fallback
+ * tier / no stickiness). A missing value reads as 0, not as the list default.
+ */
+function clampGroupWeight(value) {
+  const n = parseInt(value, 10);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(10, n));
+}
+
+function useBackgroundSkills() {
+  try {
+    return !!game.settings.get("pf1", "allowBackgroundSkills");
+  } catch {
+    return false; // system setting missing (very old PF1) — treat the rule as off
+  }
+}
+
+function isBackgroundSkill(key) {
+  return (pf1?.config?.backgroundSkills ?? []).includes(key);
+}
+
+/**
+ * The actor's legal skill-rank budget, re-deriving the system's own accounting
+ * (actor-sheet.mjs `_prepareSkills`). Racial HD are class items too, so bestiary NPCs
+ * get a budget; only an actor with no class items at all comes back at 0.
+ * Mindless actors (nil Int) get favored-class picks and nothing else, matching core.
+ *
+ * Returns the two pools separately. Background points are only ever spendable on
+ * background skills; adventure points go anywhere. See DESIGN.md §2.6.1.
+ */
+function computeSkillBudget(actor) {
+  const abilities = actor?.system?.abilities;
+  const isMindless = abilities?.int?.value === null;
+  const intMod = isMindless ? 0 : (abilities?.int?.mod ?? 0);
+  const withBackground = useBackgroundSkills();
+
+  let adventure = 0;
+  let background = 0;
+  for (const cls of actor?.itemTypes?.class ?? []) {
+    if (cls.subType === "mythic") continue;
+    if (pf1.config.favoredClassTypes.includes(cls.subType)) adventure += cls.system.fc?.skill?.value || 0;
+    if (isMindless) continue;
+    const hd = cls.hitDice;
+    if (!hd) continue;
+    // Int from HD applies even when the class grants zero skills per level.
+    adventure += Math.max(1, (cls.system.skillsPerLevel || 0) + intMod) * hd;
+    if (withBackground && pf1.config.backgroundSkillClasses.includes(cls.subType)) {
+      background += hd * pf1.config.backgroundSkillsPerLevel;
+    }
+  }
+  // Where a Change-driven bonus (a `bonusSkillRanks` target) lands. PF1 has no
+  // background-specific Change target, so everything arriving this way counts as an
+  // adventure rank — even when a house rule means it as a background one. See the hook
+  // below for how such a rule corrects it.
+  adventure += actor?.system?.details?.skills?.bonus || 0;
+
+  const budget = {
+    adventure: Math.max(0, Math.floor(adventure)),
+    background: Math.max(0, Math.floor(background)),
+    get total() { return this.adventure + this.background; }
+  };
+
+  /**
+   * Let other modules reconcile a house rule the actor data cannot express. Listeners
+   * mutate `budget.adventure` / `budget.background` in place.
+   *
+   * The motivating case: a module grants a free *background* rank, but the only lever
+   * PF1 offers is `bonusSkillRanks`, which physically lands in the adventure pool. Such
+   * a module patches its own sheet display to re-pool it — and without this hook we
+   * would read the raw data and spend that rank on an adventure skill.
+   */
+  Hooks.callAll("pf1TokenRandomizerSkillBudget", actor, budget);
+  budget.adventure = Math.max(0, Math.floor(budget.adventure || 0));
+  budget.background = Math.max(0, Math.floor(budget.background || 0));
+  return budget;
+}
+
+/** Max ranks in any one skill: the actor's character level (total class + racial HD). */
+function skillRankCap(actor) {
+  return Math.max(1, actor?.system?.attributes?.hd?.total || 1);
+}
+
+// ─── Subskill Groups ─────────────────────────────────────────────────────────────
+// A group is a named list of subskill names under one parent skill (e.g. "Smithing"
+// under Craft). A subskill row referencing a group draws ONE member per token, uniformly
+// — the row's weight is what competes with sibling rows, exactly as an adjective list's
+// weight competes while the word inside it is drawn evenly. See DESIGN.md §4.9.
+
+function getSubSkillGroups() {
+  const raw = game.settings.get(MODULE_ID, "subskill-groups");
+  return Array.isArray(raw) ? raw : [];
+}
+
+/** The groups defined for one parent skill, in stored order. */
+function getSubSkillGroupsFor(skillKey) {
+  return getSubSkillGroups().filter(g => g?.skill === skillKey);
+}
+
+function getSubSkillGroup(id) {
+  return getSubSkillGroups().find(g => g?.id === id) ?? null;
+}
+
+// Seed speciality lists, offered as autocomplete out of the box (DESIGN.md §4.10).
+// Lore is deliberately empty: its specialities are campaign-specific.
+const DEFAULT_KNOWN_SUBSKILLS = {
+  art: "choreography; criticism; literature; musical composition; philosophy; playwriting",
+  crf: "alchemy; armorsmithing; basketweaving; bookbinding; bowmaking; blacksmithing; calligraphy; "
+     + "carpentry; cobbling; gemcutting; jewelry; leatherworking; locksmithing; painting; pottery; "
+     + "sculpting; shipmaking; stonemasonry; taxidermy; trapmaking; weaponsmithing; weaving",
+  prf: "acting; comedy; dancing; keyboard instruments; oratory; percussion instruments; "
+     + "string instruments; weapon drill; wind instruments; singing",
+  pro: "apothecary; boater; bookkeeper; brewer; cook; driver; farmer; fisher; guide; herbalist; "
+     + "herder; hunter; innkeeper; lumberjack; miller; miner; porter; rancher; sailor; scribe; "
+     + "siege engineer; stablehand; tanner; teamster; woodcutter",
+  lor: ""
+};
+
+// Bumped when DEFAULT_KNOWN_SUBSKILLS gains entries a live world should pick up. The
+// seed runs once per version and only fills skills the GM has left empty, so it can
+// never overwrite an edited list. A `default` alone would not be enough: changing a
+// setting's default moves nothing in a world where the Setting document already exists.
+const KNOWN_SUBSKILL_SEED_VERSION = 1;
+
+async function seedKnownSubSkills() {
+  if (!game.user?.isGM) return;
+  if (game.settings.get(MODULE_ID, "known-subskills-seed") >= KNOWN_SUBSKILL_SEED_VERSION) return;
+
+  const current = getKnownSubSkills();
+  const merged = { ...current };
+  let added = 0;
+  for (const [key, value] of Object.entries(DEFAULT_KNOWN_SUBSKILLS)) {
+    const names = parseSubSkillList(value);
+    if (!names.length) continue;
+    if (parseSubSkillList(current[key]).length) continue; // GM has their own list — leave it
+    merged[key] = names;
+    added++;
+  }
+  if (added) await game.settings.set(MODULE_ID, "known-subskills", merged);
+  await game.settings.set(MODULE_ID, "known-subskills-seed", KNOWN_SUBSKILL_SEED_VERSION);
+  if (added) console.log(`${LOG} Seeded default speciality lists for ${added} skill(s).`);
+}
+
+/**
+ * Known speciality names per arbitrary skill, used purely to autocomplete the subskill
+ * name field (an HTML <datalist>). Stored as one semicolon-separated string per skill;
+ * typing something not on the list is always allowed. See DESIGN.md §4.10.
+ */
+function getKnownSubSkills() {
+  const raw = game.settings.get(MODULE_ID, "known-subskills");
+  return (raw && typeof raw === "object") ? raw : {};
+}
+
+/**
+ * Normalize a speciality list to trimmed, de-duped names. Accepts the stored array form
+ * and the semicolon-separated string the seed constant is written in (and that older
+ * saves used), so both round-trip through the same path.
+ */
+function parseSubSkillList(value) {
+  const raw = Array.isArray(value) ? value : String(value ?? "").split(";");
+  const seen = new Set();
+  const out = [];
+  for (const entry of raw) {
+    const name = String(entry ?? "").trim();
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(name);
+  }
+  return out;
+}
+
+function getKnownSubSkillsFor(skillKey) {
+  return parseSubSkillList(getKnownSubSkills()[skillKey]);
+}
+
+/** A group's usable member names (trimmed, de-duped, blanks dropped). */
+function groupMembers(group) {
+  const seen = new Set();
+  const out = [];
+  for (const raw of group?.members ?? []) {
+    const name = String(raw ?? "").trim();
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(name);
+  }
+  return out;
+}
+
+/**
+ * Resolve one arbitrary entry's named subskills against an actor into pool candidates.
+ * Subskill ids are positional per actor (`crf1`, `crf2`, …), so an existing subskill is
+ * matched by NAME; when there is no match, the first free id is claimed and `create`
+ * carries the payload to write, copying the parent's ability/rt/cs/acp as the system's
+ * own "add subskill" control does.
+ */
+function resolveSubSkillCandidates(actor, entry) {
+  const key = entry.key;
+  const parent = actor.system.skills?.[key];
+  if (!parent) return [];
+
+  const existing = parent.subSkills ?? {};
+  const idByName = new Map();
+  for (const [id, sub] of Object.entries(existing)) {
+    const name = String(sub?.name ?? "").trim().toLowerCase();
+    if (name && !idByName.has(name)) idByName.set(name, id);
+  }
+
+  const claimed = new Set(Object.keys(existing));
+  // Subskill ids this entry has already taken, so a group prefers an unclaimed member
+  // rather than colliding with a sibling row (whose weight would then be lost to the
+  // pool's de-dup).
+  const takenByEntry = new Set();
+
+  /** The id an existing subskill of this name would resolve to, or null. */
+  const idFor = (name) => idByName.get(name.trim().toLowerCase()) ?? null;
+
+  const out = [];
+  for (const sub of entry.subSkills ?? []) {
+    let name;
+    if (sub?.group) {
+      const members = groupMembers(getSubSkillGroup(sub.group));
+      if (!members.length) continue; // deleted group, or one with no usable members
+      const free = members.filter(m => {
+        const existingId = idFor(m);
+        return !existingId || !takenByEntry.has(existingId);
+      });
+      const from = free.length ? free : members;
+      name = from[Math.floor(Math.random() * from.length)];
+    } else {
+      name = String(sub?.name ?? "").trim();
+    }
+    if (!name) continue;
+
+    let id = idByName.get(name.toLowerCase());
+    let create = null;
+    if (!id) {
+      let n = 1;
+      while (claimed.has(`${key}${n}`)) n++;
+      id = `${key}${n}`;
+      idByName.set(name.toLowerCase(), id);
+      create = {
+        name,
+        ability: parent.ability,
+        rank: 0,
+        rt: parent.rt ?? false,
+        cs: parent.cs ?? false,
+        acp: parent.acp ?? false
+      };
+    }
+    claimed.add(id);
+    takenByEntry.add(id);
+    out.push({
+      id: `${key}.${id}`,
+      path: `system.skills.${key}.subSkills.${id}`,
+      label: `${skillLabel(key)} (${name})`,
+      weight: clampSkillWeight(sub.weight),
+      // Subskills only ever arrive through an explicit entry, so they focus with the list.
+      source: "list",
+      background: isBackgroundSkill(key),
+      current: existing[id]?.rank || 0,
+      create
+    });
+  }
+  return out;
+}
+
+/**
+ * Build the draw's **slots** (DESIGN.md §4.2). A slot is one row of the draw — a skill
+ * list entry, or one class/non-class skill — holding the concrete skills it can resolve
+ * to. Because the draw picks a slot first and a member second, a row covering many
+ * skills (Knowledge (any), a Craft entry with three specialities) competes as ONE unit
+ * against Perception, rather than flooding the draw with ten chances.
+ *
+ * `slot.locks` marks a row that narrows to its first-drawn member for the rest of the
+ * run — a Craft entry becomes Craft (armorsmithing). The Knowledge aliases never lock,
+ * so they can land on a different Knowledge each time.
+ *
+ * Exclusions are the only thing that removes a skill outright. A skill claimed by an
+ * earlier slot is dropped from later ones, so an explicitly listed Knowledge (arcana)
+ * beats the alias, and both beat the class/non-class sweep.
+ */
+function buildSkillSlots(actor, settings) {
+  const skills = actor.system.skills ?? {};
+  const excluded = expandExcludedSkills(settings.excluded, actor);
+  const slots = [];
+  const claimed = new Set();   // member ids already spoken for
+  const listedKeys = new Set(); // parent keys handled by an explicit entry
+
+  const plainMember = (key, source) => ({
+    id: key,
+    path: `system.skills.${key}`,
+    label: skillLabel(key),
+    weight: 1,
+    source,
+    background: isBackgroundSkill(key),
+    current: skills[key]?.rank || 0,
+    create: null
+  });
+
+  const addSlot = (slot) => {
+    slot.members = slot.members.filter(m => !claimed.has(m.id));
+    if (!slot.members.length) return;
+    for (const m of slot.members) { claimed.add(m.id); m.source = slot.source; }
+    slots.push(slot);
+  };
+
+  const entries = settings.entries ?? [];
+  // Concrete entries first, then aliases: an explicitly listed Knowledge (arcana) keeps
+  // its own weight regardless of where Knowledge (any) sits in the list.
+  for (const entry of entries) {
+    const key = entry?.key;
+    if (!key || isSkillAlias(key) || excluded.has(key) || !skills[key]) continue;
+    listedKeys.add(key);
+    const weight = clampSkillWeight(entry.weight);
+    if (isArbitrarySkill(key)) {
+      // Specialities carry their own weights, and the row narrows to one once drawn.
+      addSlot({
+        id: `list:${key}`, source: "list", weight,
+        memberMode: "weighted", locks: true,
+        members: resolveSubSkillCandidates(actor, entry)
+      });
+    } else {
+      addSlot({
+        id: `list:${key}`, source: "list", weight,
+        memberMode: "uniform", locks: false,
+        members: [plainMember(key, "list")]
+      });
+    }
+  }
+  for (const entry of entries) {
+    const key = entry?.key;
+    if (!isSkillAlias(key)) continue;
+    const members = aliasSkillKeys(key, actor)
+      .filter(k => !excluded.has(k) && skills[k])
+      .map(k => plainMember(k, "list"));
+    // Deliberately does NOT lock: each draw may land on a different Knowledge.
+    addSlot({
+      id: `list:${key}`, source: "list", weight: clampSkillWeight(entry.weight),
+      memberMode: "uniform", locks: false, members
+    });
+  }
+
+  for (const [key, skill] of Object.entries(skills)) {
+    if (excluded.has(key) || listedKeys.has(key)) continue;
+    if (!getSkillRegistry()[key]) continue; // skip per-actor custom skills
+    const source = skill?.cs ? "class" : "nonClass";
+    if (isArbitrarySkill(key)) {
+      // Parent rows hold no ranks, so these are only playable through specialities the
+      // actor already has. We never invent one here — that is what a list entry is for.
+      const members = Object.entries(skill?.subSkills ?? {}).map(([subId, sub]) => ({
+        id: `${key}.${subId}`,
+        path: `system.skills.${key}.subSkills.${subId}`,
+        label: `${skillLabel(key)} (${sub?.name ?? subId})`,
+        weight: 1,
+        source,
+        background: isBackgroundSkill(key),
+        current: sub?.rank || 0,
+        create: null
+      }));
+      addSlot({ id: `${source}:${key}`, source, weight: 1, memberMode: "uniform", locks: true, members });
+    } else {
+      addSlot({
+        id: `${source}:${key}`, source, weight: 1,
+        memberMode: "uniform", locks: false,
+        members: [plainMember(key, source)]
+      });
+    }
+  }
+
+  return slots;
+}
+
+/** Every concrete skill across all slots, for writing and reporting. */
+function slotMembers(slots) {
+  return slots.flatMap(s => s.members);
+}
+
+const SKILL_SOURCES = ["list", "class", "nonClass"];
+
+/** Pick uniformly from a non-empty array. */
+function uniformPick(items) {
+  return items[Math.floor(Math.random() * items.length)];
+}
+
+/**
+ * Spend the two rank pools across the candidates, one point at a time.
+ *
+ * Two phases give the background-skill asymmetry for free (DESIGN.md §2.6.1): background
+ * points can only land on background skills, adventure points land anywhere. Background
+ * points with nowhere to go are simply lost, as the rule intends.
+ *
+ * Each point is a TWO-STAGE draw (§4.4):
+ *   1. pick a category — list / class / non-class — by the three group weights;
+ *   2. pick a skill inside it: by entry weight for the list, uniformly for the other two.
+ * So a list entry's weight is relative only to its siblings in the list, never to a
+ * class skill. Only categories with room are considered, and a category weighted 0 is
+ * drawn from only when no category weighted 1+ has room — the tier rule, lifted from
+ * individual skills to categories.
+ *
+ * Focus (§4.6) is stickiness: after placing a rank, the next one repeats the same skill
+ * with probability focus/10, read from the source of that last pick. It is checked
+ * before the category roll, otherwise a three-category spread would dilute focus 10 down
+ * to a one-in-three chance of continuing. It is still gated on that skill's category
+ * being one we would have drawn from, so a fallback category can never hog ranks while a
+ * weighted one has room. `last` survives the phase change on purpose, so a focused
+ * background skill keeps going on adventure points.
+ *
+ * `fromExisting` starts each candidate at the ranks it already has instead of 0 — the
+ * "clear existing ranks" toggle turned off. The cap then applies to the running total.
+ * Returned ranks are always the FINAL value to write, not the delta.
+ */
+function distributeSkillRanks(slots, budget, cap, { weights = {}, focus = {} } = {}, fromExisting = false) {
+  const ranks = {};
+  for (const m of slotMembers(slots)) ranks[m.id] = fromExisting ? Math.min(cap, m.current || 0) : 0;
+
+  const catWeight = (source) => clampGroupWeight(weights?.[source]);
+  const stickiness = (m) => clampGroupWeight(focus?.[m.source]) / 10;
+  // slot id -> the member ids that slot has narrowed to (DESIGN.md §4.2).
+  const narrowed = new Map();
+  let last = null;
+  let spent = 0;
+
+  /** The members of one slot that could take a rank right now. */
+  const drawable = (slot, isEligible, ignoreLocks) => {
+    const open = slot.members.filter(m => ranks[m.id] < cap && isEligible(m));
+    if (ignoreLocks || !slot.locks) return open;
+    const allowed = narrowed.get(slot.id);
+    return allowed ? open.filter(m => allowed.has(m.id)) : open;
+  };
+
+  /** One rank: category, then slot, then member. Returns null when nothing can take it. */
+  const drawOne = (isEligible, ignoreLocks) => {
+    const open = [];
+    for (const slot of slots) {
+      const members = drawable(slot, isEligible, ignoreLocks);
+      if (members.length) open.push({ slot, members });
+    }
+    if (!open.length) return null;
+
+    const byCategory = {};
+    for (const o of open) (byCategory[o.slot.source] ??= []).push(o);
+    const available = SKILL_SOURCES.filter(s => byCategory[s]?.length);
+    const weighted = available.filter(s => catWeight(s) >= 1);
+    const fromCats = weighted.length ? weighted : available;
+
+    // Focus first, so a three-category spread can't dilute it (§4.4).
+    if (last && fromCats.includes(last.source) && Math.random() < stickiness(last)) {
+      const hit = open.find(o => o.members.some(m => m.id === last.id));
+      if (hit) return { slot: hit.slot, member: last };
+    }
+
+    const category = weighted.length
+      ? weightedPick(fromCats, s => catWeight(s))
+      : uniformPick(fromCats);
+    // List rows compete by their own weight; class/non-class rows are a flat draw.
+    const chosen = category === "list"
+      ? weightedPick(byCategory[category], o => o.slot.weight)
+      : uniformPick(byCategory[category]);
+    const member = chosen.slot.memberMode === "weighted"
+      ? weightedPick(chosen.members, m => m.weight)
+      : uniformPick(chosen.members);
+    return { slot: chosen.slot, member };
+  };
+
+  const spend = (points, isEligible) => {
+    for (let i = 0; i < points; i++) {
+      // Only when nothing at all can take a rank under the current narrowing do locked
+      // rows open up another speciality — "if the character runs out of places to put
+      // ranks, they can pick up additional subskills if available".
+      const res = drawOne(isEligible, false) ?? drawOne(isEligible, true);
+      if (!res) break;
+
+      ranks[res.member.id]++;
+      if (res.slot.locks) {
+        let allowed = narrowed.get(res.slot.id);
+        if (!allowed) narrowed.set(res.slot.id, allowed = new Set());
+        allowed.add(res.member.id);
+      }
+      last = res.member;
+      spent++;
+    }
+  };
+
+  spend(budget.background || 0, m => m.background);
+  spend(budget.adventure || 0, () => true);
+  return { ranks, spent };
+}
+
 // ─── Settings Helpers ──────────────────────────────────────────────────────────
 
 // The three getters below are also called with a null actor by the module-level
@@ -746,13 +1336,39 @@ function getDefaultTreasureRandomizerSettings() {
 }
 
 /**
+ * Force `focus` into its per-group object shape. An earlier draft of this feature stored
+ * a single number there; merged over the object default it would survive as a number,
+ * and every `focus[source]` lookup would come back undefined.
+ */
+function normalizeSkillSettings(settings) {
+  const focus = settings?.focus;
+  if (focus && typeof focus === "object") return settings;
+  return { ...settings, focus: { list: 0, class: 0, nonClass: 0 } };
+}
+
+function getActorSkillRandomizerSettings(actor) {
+  if (unsupportedActor(actor)) return { ...getDefaultSkillRandomizerSettings(), enabled: false };
+  const flags = actor?.getFlag?.(MODULE_ID, "skillRandomizer") ?? actor?.flags?.[MODULE_ID]?.skillRandomizer;
+  const defaults = getDefaultSkillRandomizerSettings();
+  if (!flags) return defaults;
+  return normalizeSkillSettings(foundry.utils.mergeObject(defaults, flags, { inplace: false }));
+}
+
+function getDefaultSkillRandomizerSettings() {
+  return normalizeSkillSettings(
+    game.settings.get(MODULE_ID, "skill-randomizer-defaults") || foundry.utils.deepClone(SKILL_DEFAULTS)
+  );
+}
+
+/**
  * Check whether ANY randomizer feature is enabled for an actor
  */
 function isAnyRandomizerEnabled(actor) {
   const abilitySettings = getActorRandomizerSettings(actor);
   const nameSettings = getActorNameRandomizerSettings(actor);
   const treasureSettings = getActorTreasureRandomizerSettings(actor);
-  return abilitySettings.enabled || nameSettings.enabled || treasureSettings.enabled;
+  const skillSettings = getActorSkillRandomizerSettings(actor);
+  return abilitySettings.enabled || nameSettings.enabled || treasureSettings.enabled || skillSettings.enabled;
 }
 
 // ─── Token Creation Logic ──────────────────────────────────────────────────────
@@ -984,6 +1600,112 @@ async function randomizeTokenTreasure(tokenDoc) {
   console.log(`${LOG} Randomized treasure for ${actor.name}: ${goldValue.toFixed(2)} gp value →`, coins);
 }
 
+/**
+ * Deal out skill ranks (DESIGN.md §4). Must run AFTER the ability randomizer: the rank
+ * budget reads Intelligence, which that worker may have just rewritten (or nulled), and
+ * the actor has re-prepared by the time its `update()` resolves.
+ */
+async function randomizeTokenSkills(tokenDoc) {
+  const actor = tokenDoc.actor;
+  if (!actor) return;
+  if (tokenDoc.actorLink) return;
+
+  const settings = getActorSkillRandomizerSettings(actor);
+  if (!settings.enabled) return;
+
+  const skills = actor.system.skills;
+  if (!skills) return;
+
+  const budget = computeSkillBudget(actor);
+  const cap = skillRankCap(actor);
+  const slots = buildSkillSlots(actor, settings);
+
+  // Bail before touching anything when there is nowhere to put ranks. Clearing is a
+  // preparation step for a distribution, not a feature of its own: without this guard,
+  // merely ticking "enable" on an unconfigured tab would zero out the statblock's skills.
+  if (!slots.length) {
+    console.warn(`${LOG} Skill randomizer is enabled for ${actor.name} but no skill can receive ranks (empty list, and class skills are off or unavailable). Leaving skills untouched.`);
+    return;
+  }
+
+  // Opt-in: an absent key means "don't wipe", matching the shipped default.
+  const wipe = settings.wipeExisting === true;
+  const updateData = {};
+
+  // Wipe first: without it a statblock's own ranks compound on top of the roll and blow
+  // past the legal budget. Excluded skills are skipped entirely, so they keep whatever
+  // the statblock came with — that is the one job exclusion has that a zero weight does
+  // not. Per-actor custom skills are left alone (they are outside this feature's scope).
+  if (wipe) {
+    const excluded = expandExcludedSkills(settings.excluded, actor);
+    for (const [key, skill] of Object.entries(skills)) {
+      if (excluded.has(key) || !getSkillRegistry()[key]) continue;
+      if (isArbitrarySkill(key)) {
+        // Clear every speciality of a parent that is in play at all — whether it got
+        // there as a list entry or through the class/non-class sweep — so the result is
+        // this roll and nothing else.
+        for (const subId of Object.keys(skill?.subSkills ?? {})) {
+          updateData[`system.skills.${key}.subSkills.${subId}.rank`] = 0;
+        }
+      } else {
+        updateData[`system.skills.${key}.rank`] = 0;
+      }
+    }
+  }
+
+  const { ranks, spent } = distributeSkillRanks(slots, budget, cap, {
+    weights: {
+      list: settings.listWeight,
+      class: settings.classWeight,
+      nonClass: settings.nonClassWeight
+    },
+    focus: settings.focus
+  }, !wipe);
+  const assigned = {};
+  for (const m of slotMembers(slots)) {
+    const rank = ranks[m.id] ?? 0;
+    if (m.create) {
+      // Only materialize a named subskill that actually drew ranks, so a zero roll
+      // doesn't litter the actor with empty Craft/Perform rows.
+      if (rank > 0) updateData[m.path] = { ...m.create, rank };
+    } else {
+      updateData[`${m.path}.rank`] = rank;
+    }
+    if (rank > 0) assigned[m.label] = rank;
+  }
+
+  if (!Object.keys(updateData).length) return;
+  await actor.update(updateData);
+
+  const total = budget.total;
+  if (total === 0) {
+    console.warn(`${LOG} Skill randomizer budget is 0 for ${actor.name} (no class items?); ranks cleared only.`);
+  } else if (spent < total) {
+    console.warn(`${LOG} Skill randomizer left ${total - spent} of ${total} ranks unspent for ${actor.name} — everything with room is capped or excluded (cap ${cap}/skill).`);
+  }
+  console.log(`${LOG} Randomized skills for ${actor.name}: ${spent}/${total} ranks (${budget.adventure} adventure + ${budget.background} background), cap ${cap} →`, assigned);
+}
+
+// ─── Skill Profiles ──────────────────────────────────────────────────────────────
+// Named snapshots of a Skills-tab config (DESIGN.md §6). Loading one COPIES it into the
+// draft and stamps provenance — the actor never re-reads the profile at placement, so
+// editing or deleting a profile can't reach through to actors already configured.
+
+/** The config keys a profile stores: the whole Skills tab minus its own bookkeeping. */
+const SKILL_PROFILE_KEYS = ["entries", "listWeight", "classWeight", "nonClassWeight", "focus", "excluded", "wipeExisting"];
+
+function getSkillProfiles() {
+  const raw = game.settings.get(MODULE_ID, "skill-profiles");
+  return Array.isArray(raw) ? raw : [];
+}
+
+/** Strip a Skills draft down to the storable profile config. */
+function toSkillProfileConfig(settings) {
+  const config = {};
+  for (const key of SKILL_PROFILE_KEYS) config[key] = foundry.utils.deepClone(settings[key]);
+  return config;
+}
+
 // ─── Settings Dialog (ApplicationV2, Tabbed) ─────────────────────────────────────
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
@@ -997,9 +1719,12 @@ class TokenRandomizerSettings extends HandlebarsApplicationMixin(ApplicationV2) 
     this.draftAbilitySettings = null;
     this.draftNameSettings = null;
     this.draftTreasureSettings = null;
+    this.draftSkillSettings = null;
     // UI-only collapse state for name components, tracked by segment index (kept in
     // sync as segments are added/removed/reordered so it isn't written to settings).
     this.collapsedSegments = new Set();
+    // UI-only collapse state for the framed boxes, keyed by box name.
+    this.collapsedBoxes = new Set();
   }
 
   static DEFAULT_OPTIONS = {
@@ -1022,7 +1747,14 @@ class TokenRandomizerSettings extends HandlebarsApplicationMixin(ApplicationV2) 
       moveSegmentDown: TokenRandomizerSettings.#onMoveSegmentDown,
       addFilter: TokenRandomizerSettings.#onAddFilter,
       removeFilter: TokenRandomizerSettings.#onRemoveFilter,
-      rerollPreview: TokenRandomizerSettings.#onRerollPreview
+      rerollPreview: TokenRandomizerSettings.#onRerollPreview,
+      removeSkillEntry: TokenRandomizerSettings.#onRemoveSkillEntry,
+      addSubSkill: TokenRandomizerSettings.#onAddSubSkill,
+      removeSubSkill: TokenRandomizerSettings.#onRemoveSubSkill,
+      removeExcludedSkill: TokenRandomizerSettings.#onRemoveExcludedSkill,
+      toggleBox: TokenRandomizerSettings.#onToggleBox,
+      loadSkillProfile: TokenRandomizerSettings.#onLoadSkillProfile,
+      saveSkillProfile: TokenRandomizerSettings.#onSaveSkillProfile
     }
   };
 
@@ -1059,6 +1791,11 @@ class TokenRandomizerSettings extends HandlebarsApplicationMixin(ApplicationV2) 
       this.draftTreasureSettings = this.isDefaults
         ? foundry.utils.deepClone(getDefaultTreasureRandomizerSettings())
         : foundry.utils.deepClone(getActorTreasureRandomizerSettings(this.actor));
+    }
+    if (!this.draftSkillSettings) {
+      this.draftSkillSettings = this.isDefaults
+        ? foundry.utils.deepClone(getDefaultSkillRandomizerSettings())
+        : foundry.utils.deepClone(getActorSkillRandomizerSettings(this.actor));
     }
 
     // Ability methods (built-ins + custom arrays/formulas).
@@ -1107,6 +1844,7 @@ class TokenRandomizerSettings extends HandlebarsApplicationMixin(ApplicationV2) 
       isDefaults: this.isDefaults,
       actorName: this.actor?.name || game.i18n.localize("TR.DefaultSettings"),
       activeTab: this.activeTab,
+      ...this._prepareSkillContext(),
       // Ability tab
       abilityEnabled: this.draftAbilitySettings.enabled,
       prioritizeEnabled: this.draftAbilitySettings.prioritizeEnabled,
@@ -1132,6 +1870,124 @@ class TokenRandomizerSettings extends HandlebarsApplicationMixin(ApplicationV2) 
         min: this.draftTreasureSettings.distribution[key]?.min ?? 0,
         max: this.draftTreasureSettings.distribution[key]?.max ?? 100
       }))
+    };
+  }
+
+  /**
+   * Render model for the Skills tab. The rank budget and the actor's class skills are
+   * live facts about *this* actor, so in defaults mode (no actor) they are reported as
+   * "computed at placement" rather than guessed at.
+   */
+  _prepareSkillContext() {
+    const draft = this.draftSkillSettings;
+    const registry = getSkillRegistry();
+    const actorSkills = this.actor?.system?.skills ?? {};
+
+    const listed = new Set((draft.entries ?? []).map(e => e?.key));
+    const excluded = new Set(draft.excluded ?? []);
+    const sortByLabel = (a, b) => a.label.localeCompare(b.label);
+
+    const entries = (draft.entries ?? []).map((entry, index) => {
+      const arbitrary = isArbitrarySkill(entry.key);
+      const alias = isSkillAlias(entry.key);
+      const subSkills = entry.subSkills ?? [];
+      const groups = arbitrary ? getSubSkillGroupsFor(entry.key) : [];
+      return {
+        index,
+        key: entry.key,
+        label: skillLabel(entry.key),
+        weight: clampSkillWeight(entry.weight),
+        isArbitrary: arbitrary,
+        isAlias: alias,
+        // Member count, so a Knowledge (any) row says what it stands for. A class-only
+        // alias can't be counted without an actor, so the defaults dialog shows none.
+        aliasCount: alias ? aliasSkillKeys(entry.key, this.actor).length : 0,
+        aliasUnknownCount: alias && !this.actor && SKILL_ALIASES[entry.key]?.classOnly,
+        // A class skill only in the per-actor dialog; the defaults dialog has no actor.
+        // An alias counts as one if any of its members is.
+        isClassSkill: alias
+          ? aliasSkillKeys(entry.key, this.actor).some(k => actorSkills[k]?.cs)
+          : !!actorSkills[entry.key]?.cs,
+        // Autocomplete source for the literal-name fields on this parent skill.
+        knownId: `tr-known-${entry.key}`,
+        known: arbitrary ? getKnownSubSkillsFor(entry.key) : [],
+        subSkills: subSkills.map((sub, subIndex) => {
+          const vm = { index: subIndex, weight: clampSkillWeight(sub?.weight) };
+          if (sub?.group) {
+            const group = groups.find(g => g.id === sub.group);
+            vm.isGroup = true;
+            vm.group = sub.group;
+            // A group deleted out from under the row stays visible and selected as
+            // "(unavailable)", so the reference isn't silently rewritten.
+            vm.groupOptions = groups.map(g => ({ value: g.id, label: `${g.name} (${groupMembers(g).length})`, selected: g.id === sub.group }));
+            if (!group) {
+              vm.groupMissing = true;
+              vm.groupOptions.push({ value: sub.group, label: game.i18n.localize("TR.Skill.GroupUnavailable"), selected: true });
+            }
+          } else {
+            vm.name = sub?.name ?? "";
+          }
+          return vm;
+        }),
+        hasGroups: groups.length > 0,
+        // An arbitrary entry needs at least one row that can actually resolve: a
+        // non-blank literal name, or a group reference. Flagged inline, rejected on Save.
+        needsSubSkills: arbitrary && !subSkills.some(s => s?.group || String(s?.name ?? "").trim())
+      };
+    });
+
+    // Aliases sit alongside the real skills in both pickers. An alias is offered until
+    // it is itself chosen; its members stay individually selectable either way.
+    const options = (skip) => [...Object.keys(registry), ...Object.keys(SKILL_ALIASES)]
+      .filter(key => !skip.has(key))
+      .map(key => ({ value: key, label: skillLabel(key) }))
+      .sort(sortByLabel);
+
+    // Budget readout (§4.1). Zero is a real, silent failure mode, so it is called out.
+    const withBackground = useBackgroundSkills();
+    let budgetLabel;
+    let budgetZero = false;
+    if (this.actor) {
+      const budget = computeSkillBudget(this.actor);
+      budgetZero = budget.total === 0;
+      const cap = skillRankCap(this.actor);
+      budgetLabel = withBackground
+        ? game.i18n.format("TR.Skill.BudgetActorBg", { ranks: budget.adventure, bg: budget.background, cap })
+        : game.i18n.format("TR.Skill.BudgetActor", { ranks: budget.adventure, cap });
+    } else {
+      budgetLabel = game.i18n.localize("TR.Skill.BudgetDeferred");
+    }
+
+    const focus = draft.focus ?? {};
+    const profiles = getSkillProfiles();
+    return {
+      skillEnabled: draft.enabled,
+      skillBudgetLabel: budgetLabel,
+      skillBudgetZero: budgetZero,
+      skillUseBackground: withBackground,
+      skillListWeight: clampGroupWeight(draft.listWeight),
+      skillClassWeight: clampGroupWeight(draft.classWeight),
+      skillNonClassWeight: clampGroupWeight(draft.nonClassWeight),
+      skillFocusList: clampGroupWeight(focus.list),
+      skillFocusClass: clampGroupWeight(focus.class),
+      skillFocusNonClass: clampGroupWeight(focus.nonClass),
+      // Only meaningful with an actor in hand; the defaults dialog can't know.
+      skillNoClassSkills: !!this.actor && !Object.values(actorSkills).some(s => s?.cs),
+      skillWipeExisting: draft.wipeExisting === true,
+      skillEntries: entries,
+      skillAddOptions: options(listed),
+      skillExcluded: [...excluded].filter(key => registry[key] || isSkillAlias(key))
+        .map(key => ({ key, label: skillLabel(key) })).sort(sortByLabel),
+      skillExcludeOptions: options(excluded),
+      skillListCollapsed: this.collapsedBoxes.has("skill-list"),
+      skillExcludedCollapsed: this.collapsedBoxes.has("skill-excluded"),
+      nameComponentsCollapsed: this.collapsedBoxes.has("name-components"),
+      skillProfiles: profiles.map(p => ({ id: p.id, name: p.name })),
+      skillHasProfiles: profiles.length > 0,
+      // Combined so the template emits one `disabled` attribute, not two.
+      skillProfilesUsable: draft.enabled && profiles.length > 0,
+      skillProfileName: draft.profile?.name ?? "",
+      skillProfileModified: !!draft.profile?.modified
     };
   }
 
@@ -1274,6 +2130,90 @@ class TokenRandomizerSettings extends HandlebarsApplicationMixin(ApplicationV2) 
       this.draftTreasureSettings.distribution[coin].max = isNaN(parsed) ? 100 : Math.max(0, Math.min(parsed, 100));
       this.render();
     });
+
+    // ── Skills Tab ──
+    const skillEntry = (el) => this.draftSkillSettings.entries[Number(el.dataset.entry)];
+
+    on(".skill-enabled", "change", (e) => {
+      this.draftSkillSettings.enabled = e.currentTarget.checked;
+      this.render();
+    });
+    // Group weights (0 = fallback tier) and the three focus sliders all share a shape:
+    // clamp 0–10, write to a draft path, update the readout without re-rendering.
+    const groupSlider = (selector, apply) => on(selector, "input", (e) => {
+      const val = clampGroupWeight(e.currentTarget.value);
+      apply(val);
+      this.#markSkillProfileModified();
+      this._setWeightLabel(e.currentTarget, val);
+    });
+    groupSlider(".skill-list-weight", v => { this.draftSkillSettings.listWeight = v; });
+    groupSlider(".skill-class-weight", v => { this.draftSkillSettings.classWeight = v; });
+    groupSlider(".skill-nonclass-weight", v => { this.draftSkillSettings.nonClassWeight = v; });
+    // Focus is per-group, so it reads its key off the element rather than using the helper.
+    on(".skill-focus", "input", (e) => {
+      const val = clampGroupWeight(e.currentTarget.value);
+      if (!this.draftSkillSettings.focus) this.draftSkillSettings.focus = {};
+      this.draftSkillSettings.focus[e.currentTarget.dataset.group] = val;
+      this.#markSkillProfileModified();
+      this._setWeightLabel(e.currentTarget, val);
+    });
+    on(".skill-wipe-existing", "change", (e) => {
+      this.draftSkillSettings.wipeExisting = e.currentTarget.checked;
+      this.#markSkillProfileModified();
+    });
+    on(".skill-weight", "input", (e) => {
+      const val = clampSkillWeight(e.currentTarget.value);
+      skillEntry(e.currentTarget).weight = val;
+      this.#markSkillProfileModified();
+      this._setWeightLabel(e.currentTarget, val);
+    });
+    on(".subskill-name", "change", (e) => {
+      const subs = skillEntry(e.currentTarget).subSkills ?? [];
+      const sub = subs[Number(e.currentTarget.dataset.sub)];
+      if (sub) sub.name = e.currentTarget.value;
+      this.#markSkillProfileModified();
+    });
+    on(".subskill-group", "change", (e) => {
+      const subs = skillEntry(e.currentTarget).subSkills ?? [];
+      const sub = subs[Number(e.currentTarget.dataset.sub)];
+      if (sub) sub.group = e.currentTarget.value;
+      this.#markSkillProfileModified();
+      this.render();
+    });
+    on(".subskill-weight", "input", (e) => {
+      const val = clampSkillWeight(e.currentTarget.value);
+      const sub = (skillEntry(e.currentTarget).subSkills ?? [])[Number(e.currentTarget.dataset.sub)];
+      if (sub) sub.weight = val;
+      this.#markSkillProfileModified();
+      this._setWeightLabel(e.currentTarget, val);
+    });
+    // The two "add" pickers are <select>s rather than buttons: there are ~37 choices, so
+    // a dropdown is the only sane control. They reset to their blank option on re-render.
+    on(".skill-add-select", "change", (e) => {
+      const key = e.currentTarget.value;
+      if (!key) return;
+      const entry = { key, weight: DEFAULT_SKILL_WEIGHT };
+      if (isArbitrarySkill(key)) entry.subSkills = [];
+      this.draftSkillSettings.entries.push(entry);
+      this.#markSkillProfileModified();
+      this.render();
+    });
+    on(".skill-exclude-select", "change", (e) => {
+      const key = e.currentTarget.value;
+      if (!key) return;
+      if (!Array.isArray(this.draftSkillSettings.excluded)) this.draftSkillSettings.excluded = [];
+      if (!this.draftSkillSettings.excluded.includes(key)) this.draftSkillSettings.excluded.push(key);
+      this.#markSkillProfileModified();
+      this.render();
+    });
+  }
+
+  /**
+   * Stamp a loaded profile as diverged, so the Skills tab stops claiming the draft still
+   * matches "City Guard" the moment anything is changed (DESIGN.md §6.3).
+   */
+  #markSkillProfileModified() {
+    if (this.draftSkillSettings.profile) this.draftSkillSettings.profile.modified = true;
   }
 
   /** Regenerate the live name-preview sample(s) in place (no full re-render). */
@@ -1292,10 +2232,15 @@ class TokenRandomizerSettings extends HandlebarsApplicationMixin(ApplicationV2) 
     setPreview(".obscured-preview-value", built.obscured); // no-op when feature is off
   }
 
-  /** Update the numeric readout next to a weight slider and refresh the preview. */
-  _updateWeightLabel(rangeEl, val) {
+  /** Update the numeric readout next to a slider, in place (keeps drag focus alive). */
+  _setWeightLabel(rangeEl, val) {
     const label = rangeEl.parentElement?.querySelector(".weight-value");
     if (label) label.textContent = String(val);
+  }
+
+  /** As above, plus a name-preview refresh (Name tab sliders only). */
+  _updateWeightLabel(rangeEl, val) {
+    this._setWeightLabel(rangeEl, val);
     this._refreshPreview();
   }
 
@@ -1398,6 +2343,128 @@ class TokenRandomizerSettings extends HandlebarsApplicationMixin(ApplicationV2) 
     this._refreshPreview();
   }
 
+  // ── Skills tab ──
+
+  static #onRemoveSkillEntry(event, target) {
+    this.draftSkillSettings.entries.splice(Number(target.dataset.entry), 1);
+    this.#markSkillProfileModified();
+    this.render();
+  }
+
+  static #onAddSubSkill(event, target) {
+    const entry = this.draftSkillSettings.entries[Number(target.dataset.entry)];
+    if (!Array.isArray(entry.subSkills)) entry.subSkills = [];
+    if (target.dataset.kind === "group") {
+      const groups = getSubSkillGroupsFor(entry.key);
+      if (!groups.length) return; // the button is only rendered when groups exist
+      entry.subSkills.push({ group: groups[0].id, weight: DEFAULT_SKILL_WEIGHT });
+    } else {
+      entry.subSkills.push({ name: "", weight: DEFAULT_SKILL_WEIGHT });
+    }
+    this.#markSkillProfileModified();
+    this.render();
+  }
+
+  static #onRemoveSubSkill(event, target) {
+    const entry = this.draftSkillSettings.entries[Number(target.dataset.entry)];
+    entry.subSkills.splice(Number(target.dataset.sub), 1);
+    this.#markSkillProfileModified();
+    this.render();
+  }
+
+  /** Collapse/expand a framed box in place, so open editors and focus survive. */
+  static #onToggleBox(event, target) {
+    const box = target.dataset.box;
+    if (this.collapsedBoxes.has(box)) this.collapsedBoxes.delete(box);
+    else this.collapsedBoxes.add(box);
+    target.closest(".tr-box")?.classList.toggle("collapsed");
+  }
+
+  static #onRemoveExcludedSkill(event, target) {
+    const key = target.dataset.key;
+    this.draftSkillSettings.excluded = (this.draftSkillSettings.excluded ?? []).filter(k => k !== key);
+    this.#markSkillProfileModified();
+    this.render();
+  }
+
+  /**
+   * Copy a saved profile into the draft (DESIGN.md §6.3). `enabled` is left alone — the
+   * profile describes *how* to randomize, not whether this actor does.
+   */
+  static #onLoadSkillProfile(event, target) {
+    const select = this.element?.querySelector(".skill-profile-select");
+    const id = select?.value;
+    if (!id) return;
+    const profile = getSkillProfiles().find(p => p.id === id);
+    if (!profile) {
+      ui.notifications?.warn(game.i18n.localize("TR.Notif.SkillProfileMissing"));
+      return;
+    }
+    Object.assign(this.draftSkillSettings, foundry.utils.deepClone(profile.config ?? {}));
+    this.draftSkillSettings = normalizeSkillSettings(this.draftSkillSettings);
+    this.draftSkillSettings.profile = { id: profile.id, name: profile.name };
+    ui.notifications?.info(game.i18n.format("TR.Notif.SkillProfileLoaded", { name: profile.name }));
+    this.render();
+  }
+
+  /**
+   * Write the current draft to the world profile list. This commits immediately and
+   * independently of the dialog's own Save/Cancel: a profile is world data, not part of
+   * the actor draft, so cancelling the dialog must not un-save it.
+   */
+  static async #onSaveSkillProfile(event, target) {
+    const invalid = TokenRandomizerSettings.#findInvalidSkillEntry(this.draftSkillSettings);
+    if (invalid) {
+      ui.notifications?.warn(game.i18n.format("TR.Notif.SkillEntryNeedsSubSkills", { skill: skillLabel(invalid.key) }));
+      return;
+    }
+    const raw = await promptForText(
+      game.i18n.localize("TR.Prompt.NewSkillProfile.Title"),
+      game.i18n.localize("TR.Prompt.NewSkillProfile.Label"),
+      this.draftSkillSettings.profile?.name ?? ""
+    );
+    if (raw === null) return;
+    const name = raw.trim();
+    if (!name) {
+      ui.notifications?.warn(game.i18n.localize("TR.Notif.SkillProfileNameRequired"));
+      return;
+    }
+
+    const profiles = getSkillProfiles();
+    const existing = profiles.find(p => p.name.toLowerCase() === name.toLowerCase());
+    if (existing) {
+      const safe = foundry.utils.escapeHTML?.(name) ?? name;
+      const ok = await foundry.applications.api.DialogV2.confirm({
+        window: { title: game.i18n.localize("TR.Dialog.OverwriteSkillProfile.Title") },
+        content: game.i18n.format("TR.Dialog.OverwriteSkillProfile.Content", { name: safe })
+      });
+      if (!ok) return;
+      existing.config = toSkillProfileConfig(this.draftSkillSettings);
+    } else {
+      profiles.push({
+        id: `profile-${foundry.utils.randomID()}`,
+        name,
+        config: toSkillProfileConfig(this.draftSkillSettings)
+      });
+    }
+    await game.settings.set(MODULE_ID, "skill-profiles", profiles);
+    const saved = profiles.find(p => p.name.toLowerCase() === name.toLowerCase());
+    this.draftSkillSettings.profile = { id: saved.id, name: saved.name };
+    ui.notifications?.info(game.i18n.format("TR.Notif.SkillProfileSaved", { name }));
+    this.render();
+  }
+
+  /**
+   * The first arbitrary entry with nothing that can resolve to a subskill, or null
+   * (DESIGN.md §4.8). A group reference counts as defined even if the group itself was
+   * later deleted — that is reported in the row, not as a save-blocking error.
+   */
+  static #findInvalidSkillEntry(settings) {
+    return (settings.entries ?? []).find(
+      e => isArbitrarySkill(e?.key) && !(e.subSkills ?? []).some(s => s?.group || String(s?.name ?? "").trim())
+    ) ?? null;
+  }
+
   static #onSwitchTab(event, target) {
     this.activeTab = target.dataset.tab;
     this.render();
@@ -1407,19 +2474,33 @@ class TokenRandomizerSettings extends HandlebarsApplicationMixin(ApplicationV2) 
     this.draftAbilitySettings = foundry.utils.deepClone(getDefaultRandomizerSettings());
     this.draftNameSettings = foundry.utils.deepClone(getDefaultNameRandomizerSettings());
     this.draftTreasureSettings = foundry.utils.deepClone(getDefaultTreasureRandomizerSettings());
+    // Also drops any loaded profile stamp, since the whole Skills draft is replaced.
+    this.draftSkillSettings = foundry.utils.deepClone(getDefaultSkillRandomizerSettings());
     this.render();
   }
 
   static async #onSave(event, target) {
+    // An arbitrary skill with no subskills can never receive ranks, so refuse to save it
+    // silently — abort and keep the dialog open, as the stat-method manager does.
+    const invalid = TokenRandomizerSettings.#findInvalidSkillEntry(this.draftSkillSettings);
+    if (invalid) {
+      this.activeTab = "skills";
+      this.render();
+      ui.notifications?.warn(game.i18n.format("TR.Notif.SkillEntryNeedsSubSkills", { skill: skillLabel(invalid.key) }));
+      return;
+    }
+
     if (this.isDefaults) {
       await game.settings.set(MODULE_ID, "ability-randomizer-defaults", this.draftAbilitySettings);
       await game.settings.set(MODULE_ID, "name-randomizer-defaults", this.draftNameSettings);
       await game.settings.set(MODULE_ID, "treasure-randomizer-defaults", this.draftTreasureSettings);
+      await game.settings.set(MODULE_ID, "skill-randomizer-defaults", this.draftSkillSettings);
       ui.notifications?.info(game.i18n.localize("TR.Notif.DefaultsSaved"));
     } else {
       await this.actor.setFlag(MODULE_ID, "abilityRandomizer", this.draftAbilitySettings);
       await this.actor.setFlag(MODULE_ID, "nameRandomizer", this.draftNameSettings);
       await this.actor.setFlag(MODULE_ID, "treasureRandomizer", this.draftTreasureSettings);
+      await this.actor.setFlag(MODULE_ID, "skillRandomizer", this.draftSkillSettings);
       ui.notifications?.info(game.i18n.format("TR.Notif.ActorSaved", { name: this.actor.name }));
       const actorRef = this.actor;
       setTimeout(() => {
@@ -1752,6 +2833,519 @@ class TokenRandomizerStatMethods extends HandlebarsApplicationMixin(ApplicationV
   }
 }
 
+// ─── Skill Profile Manager (rename / delete / reorder) ───────────────────────────
+// Profiles are CREATED from either settings dialog; this window is the only place they
+// can be renamed or deleted (DESIGN.md §6.2). To change a profile's *contents*, load it
+// into the defaults dialog, edit, and save over the same name.
+
+class TokenRandomizerSkillProfiles extends HandlebarsApplicationMixin(ApplicationV2) {
+  static DEFAULT_OPTIONS = {
+    classes: ["pf1-token-randomizer", "token-randomizer-skill-profiles"],
+    tag: "div",
+    window: { title: "TR.Window.SkillProfiles", icon: "fas fa-book", resizable: true },
+    position: { width: 520, height: "auto" },
+    actions: {
+      removeProfile: TokenRandomizerSkillProfiles.#onRemoveProfile,
+      moveProfileUp: TokenRandomizerSkillProfiles.#onMoveProfileUp,
+      moveProfileDown: TokenRandomizerSkillProfiles.#onMoveProfileDown,
+      save: TokenRandomizerSkillProfiles.#onSave,
+      cancel: TokenRandomizerSkillProfiles.#onCancel
+    }
+  };
+
+  static PARTS = {
+    body: { template: `modules/${MODULE_ID}/src/templates/skill-profiles.hbs` }
+  };
+
+  _initializeApplicationOptions(options) {
+    const applied = super._initializeApplicationOptions(options);
+    applied.uniqueId = "token-randomizer-skill-profiles";
+    return applied;
+  }
+
+  async _prepareContext(options) {
+    // Draft copy so renames/deletes only commit on Save (Cancel discards them).
+    if (!this.draft) this.draft = foundry.utils.deepClone(getSkillProfiles());
+    const list = this.draft;
+    return {
+      profiles: list.map((p, index) => {
+        const config = p.config ?? {};
+        const entries = config.entries ?? [];
+        return {
+          index,
+          isFirst: index === 0,
+          isLast: index === list.length - 1,
+          name: p.name ?? "",
+          // Enough of a fingerprint to tell two profiles apart at a glance.
+          summary: game.i18n.format("TR.SkillProfile.Summary", {
+            skills: entries.length,
+            excluded: (config.excluded ?? []).length,
+            cls: clampGroupWeight(config.classWeight),
+            other: clampGroupWeight(config.nonClassWeight)
+          }),
+          skills: entries.map(e => skillLabel(e?.key)).join(", ")
+        };
+      }),
+      hasProfiles: list.length > 0
+    };
+  }
+
+  _onRender(context, options) {
+    this.element.querySelectorAll(".skill-profile-name").forEach(el => {
+      el.addEventListener("change", (e) => {
+        this.draft[Number(e.currentTarget.dataset.index)].name = e.currentTarget.value;
+      });
+    });
+  }
+
+  static async #onRemoveProfile(event, target) {
+    const index = Number(target.dataset.index);
+    const profile = this.draft[index];
+    const safe = foundry.utils.escapeHTML?.(profile?.name ?? "") ?? profile?.name ?? "";
+    const ok = await foundry.applications.api.DialogV2.confirm({
+      window: { title: game.i18n.localize("TR.Dialog.DeleteSkillProfile.Title") },
+      content: game.i18n.format("TR.Dialog.DeleteSkillProfile.Content", { name: safe })
+    });
+    if (!ok) return;
+    this.draft.splice(index, 1);
+    this.render();
+  }
+
+  static #onMoveProfileUp(event, target) {
+    const i = Number(target.dataset.index);
+    if (i <= 0) return;
+    [this.draft[i - 1], this.draft[i]] = [this.draft[i], this.draft[i - 1]];
+    this.render();
+  }
+
+  static #onMoveProfileDown(event, target) {
+    const i = Number(target.dataset.index);
+    if (i >= this.draft.length - 1) return;
+    [this.draft[i + 1], this.draft[i]] = [this.draft[i], this.draft[i + 1]];
+    this.render();
+  }
+
+  static async #onSave(event, target) {
+    const seen = new Set();
+    for (let i = 0; i < this.draft.length; i++) {
+      const name = String(this.draft[i].name ?? "").trim();
+      if (!name) {
+        ui.notifications?.warn(game.i18n.format("TR.Notif.SkillProfileNeedsName", { num: i + 1 }));
+        return;
+      }
+      const key = name.toLowerCase();
+      if (seen.has(key)) {
+        ui.notifications?.warn(game.i18n.format("TR.Notif.SkillProfileDuplicate", { name }));
+        return;
+      }
+      seen.add(key);
+      this.draft[i].name = name;
+    }
+    await game.settings.set(MODULE_ID, "skill-profiles", this.draft);
+    ui.notifications?.info(
+      this.draft.length === 1
+        ? game.i18n.localize("TR.Notif.SkillProfilesSavedOne")
+        : game.i18n.format("TR.Notif.SkillProfilesSavedMany", { count: this.draft.length })
+    );
+    this.close();
+  }
+
+  static #onCancel(event, target) {
+    this.close();
+  }
+}
+
+// ─── Subskill Group Manager ──────────────────────────────────────────────────────
+// Defines the named member lists a Craft/Perform/Profession/Art/Lore entry can draw one
+// subskill from (DESIGN.md §4.9). Members are edited as one-per-line text, matching how
+// adjective lists are supplied.
+
+/**
+ * Member picker for one subskill group, modelled on the system's trait selectors
+ * (damage vulnerabilities/immunities): checkboxes over the parent skill's autocomplete
+ * list, plus a custom-entry field for anything not on it.
+ *
+ * ApplicationV2 rather than DialogV2 because this needs real layout — DialogV2 runs its
+ * content through cleanHTML, which strips the markup a checkbox grid needs.
+ *
+ * Members already on the group that are NOT in the autocomplete list come back as custom
+ * entries, so opening and re-saving the picker never silently drops them.
+ */
+class TokenRandomizerSubSkillPicker extends HandlebarsApplicationMixin(ApplicationV2) {
+  constructor(options = {}) {
+    super(options);
+    this.skillKey = options.skillKey;
+    this.groupName = options.groupName ?? "";
+    this.onSubmit = options.onSubmit;
+
+    this.known = getKnownSubSkillsFor(this.skillKey);
+    const knownLower = new Set(this.known.map(n => n.toLowerCase()));
+    const names = parseSubSkillList(options.names);
+    this.checked = new Set(names.filter(n => knownLower.has(n.toLowerCase())).map(n => n.toLowerCase()));
+    this.custom = names.filter(n => !knownLower.has(n.toLowerCase()));
+  }
+
+  static DEFAULT_OPTIONS = {
+    classes: ["pf1-token-randomizer", "token-randomizer-subskill-picker"],
+    tag: "div",
+    window: { title: "TR.SubSkillPicker.Title", icon: "fas fa-check-double", resizable: true },
+    position: { width: 420, height: "auto" },
+    actions: {
+      removeCustom: TokenRandomizerSubSkillPicker.#onRemoveCustom,
+      submit: TokenRandomizerSubSkillPicker.#onSubmit,
+      cancel: TokenRandomizerSubSkillPicker.#onCancel
+    }
+  };
+
+  static PARTS = {
+    body: { template: `modules/${MODULE_ID}/src/templates/subskill-picker.hbs` }
+  };
+
+  /** One window per group, so pickers for different groups don't share a DOM id. */
+  _initializeApplicationOptions(options) {
+    const applied = super._initializeApplicationOptions(options);
+    applied.uniqueId = `token-randomizer-subskill-picker-${options.groupId ?? "new"}`;
+    return applied;
+  }
+
+  get title() {
+    return this.groupName
+      ? game.i18n.format("TR.SubSkillPicker.TitleFor", { name: this.groupName })
+      : game.i18n.localize("TR.SubSkillPicker.Title");
+  }
+
+  async _prepareContext(options) {
+    return {
+      skillLabel: skillLabel(this.skillKey),
+      hasKnown: this.known.length > 0,
+      known: this.known.map(name => ({ name, checked: this.checked.has(name.toLowerCase()) })),
+      custom: this.custom,
+      count: this.checked.size + this.custom.length
+    };
+  }
+
+  _onRender(context, options) {
+    const html = this.element;
+    html.querySelectorAll(".picker-known").forEach(el => el.addEventListener("change", (e) => {
+      const name = e.currentTarget.dataset.name.toLowerCase();
+      if (e.currentTarget.checked) this.checked.add(name);
+      else this.checked.delete(name);
+      this.render(); // refresh the running count
+    }));
+
+    // Same type-and-Enter behaviour as the autocomplete editor.
+    const commit = (input) => {
+      const name = input.value.trim();
+      input.value = "";
+      if (!name) return false;
+      const lower = name.toLowerCase();
+      // Typing something already on the list just ticks its box instead of duplicating it.
+      if (this.known.some(n => n.toLowerCase() === lower)) {
+        this.checked.add(lower);
+        return true;
+      }
+      if (this.custom.some(n => n.toLowerCase() === lower)) return false;
+      this.custom.push(name);
+      return true;
+    };
+    const input = html.querySelector(".picker-custom-input");
+    input?.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      if (!commit(e.currentTarget)) return;
+      this._refocus = true;
+      this.render();
+    });
+    input?.addEventListener("blur", (e) => { if (commit(e.currentTarget)) this.render(); });
+
+    if (this._refocus) {
+      this._refocus = false;
+      input?.focus();
+    }
+  }
+
+  static #onRemoveCustom(event, target) {
+    this.custom = this.custom.filter(n => n !== target.dataset.name);
+    this.render();
+  }
+
+  static #onSubmit(event, target) {
+    // Known entries keep autocomplete-list order; custom ones follow in entry order.
+    const picked = [
+      ...this.known.filter(n => this.checked.has(n.toLowerCase())),
+      ...this.custom
+    ];
+    this.onSubmit?.(picked);
+    this.close();
+  }
+
+  static #onCancel(event, target) {
+    this.close();
+  }
+}
+
+class TokenRandomizerSubSkillGroups extends HandlebarsApplicationMixin(ApplicationV2) {
+  static DEFAULT_OPTIONS = {
+    classes: ["pf1-token-randomizer", "token-randomizer-subskill-groups"],
+    tag: "div",
+    window: { title: "TR.Window.SubSkillGroups", icon: "fas fa-layer-group", resizable: true },
+    position: { width: 560, height: "auto" },
+    actions: {
+      addGroup: TokenRandomizerSubSkillGroups.#onAddGroup,
+      removeGroup: TokenRandomizerSubSkillGroups.#onRemoveGroup,
+      selectItems: TokenRandomizerSubSkillGroups.#onSelectItems,
+      removeMember: TokenRandomizerSubSkillGroups.#onRemoveMember,
+      toggleGroup: TokenRandomizerSubSkillGroups.#onToggleGroup,
+      toggleKnown: TokenRandomizerSubSkillGroups.#onToggleKnown,
+      removeKnown: TokenRandomizerSubSkillGroups.#onRemoveKnown,
+      restoreKnown: TokenRandomizerSubSkillGroups.#onRestoreKnown,
+      save: TokenRandomizerSubSkillGroups.#onSave,
+      cancel: TokenRandomizerSubSkillGroups.#onCancel
+    }
+  };
+
+  static PARTS = {
+    body: { template: `modules/${MODULE_ID}/src/templates/subskill-groups.hbs` }
+  };
+
+  _initializeApplicationOptions(options) {
+    const applied = super._initializeApplicationOptions(options);
+    applied.uniqueId = "token-randomizer-subskill-groups";
+    return applied;
+  }
+
+  async _prepareContext(options) {
+    // Draft copies so edits only commit on Save (Cancel discards them).
+    if (!this.draft) this.draft = foundry.utils.deepClone(getSubSkillGroups());
+    // Held as arrays while editing; the stored form may be an array or a legacy
+    // semicolon string, so everything comes in through parseSubSkillList.
+    if (!this.knownDraft) {
+      const stored = getKnownSubSkills();
+      this.knownDraft = {};
+      for (const key of (pf1?.config?.arbitrarySkills ?? FALLBACK_ARBITRARY_SKILLS)) {
+        this.knownDraft[key] = parseSubSkillList(stored[key]);
+      }
+    }
+    const arbitrary = (pf1?.config?.arbitrarySkills ?? FALLBACK_ARBITRARY_SKILLS);
+
+    // UI-only collapse state, never written to settings. Groups key on their stable id
+    // (so reordering keeps it), autocomplete blocks on their skill key. Everything
+    // present at open starts collapsed — the chip lists run long and this window is
+    // mostly consulted, not edited. Anything added later is absent from these sets, so
+    // a newly added group opens expanded, which is what you want right after creating it.
+    if (!this.collapsedGroups) {
+      this.collapsedGroups = new Set(this.draft.map(g => g.id));
+      this.collapsedKnown = new Set(arbitrary);
+    }
+
+    const skillOptions = (selected) => arbitrary.map(key => ({
+      value: key,
+      label: skillLabel(key),
+      selected: key === selected
+    }));
+
+    return {
+      groups: this.draft.map((g, index) => {
+        const members = groupMembers(g);
+        return {
+          index,
+          id: g.id,
+          name: g.name ?? "",
+          members,
+          count: members.length,
+          collapsed: this.collapsedGroups.has(g.id),
+          skillOptions: skillOptions(g.skill)
+        };
+      }),
+      // Only the five arbitrary skills can have subskills at all, so only they can host
+      // a group; each row picks its parent from that short list.
+      hasGroups: this.draft.length > 0,
+      known: arbitrary.map(key => {
+        const names = this.knownDraft[key] ?? [];
+        return {
+          key,
+          label: skillLabel(key),
+          names,
+          count: names.length,
+          collapsed: this.collapsedKnown.has(key)
+        };
+      })
+    };
+  }
+
+  _onRender(context, options) {
+    const html = this.element;
+    const on = (selector, event, handler) => {
+      html.querySelectorAll(selector).forEach(el => el.addEventListener(event, handler));
+    };
+    on(".group-name", "change", (e) => {
+      this.draft[Number(e.currentTarget.dataset.index)].name = e.currentTarget.value;
+    });
+    on(".group-skill", "change", (e) => {
+      this.draft[Number(e.currentTarget.dataset.index)].skill = e.currentTarget.value;
+      this.render();
+    });
+    // Speciality entry works like the system's trait fields: type a name, press Enter,
+    // it becomes a chip. Committing on blur too means text typed and then Saved isn't
+    // silently dropped.
+    const commit = (input) => {
+      const name = input.value.trim();
+      input.value = "";
+      if (!name) return false;
+      const key = input.dataset.skill;
+      const list = this.knownDraft[key] ?? (this.knownDraft[key] = []);
+      if (list.some(n => n.toLowerCase() === name.toLowerCase())) return false;
+      list.push(name);
+      return true;
+    };
+    on(".known-input", "keydown", (e) => {
+      if (e.key !== "Enter") return;
+      e.preventDefault(); // don't submit or close the window
+      if (!commit(e.currentTarget)) return;
+      // Re-render for the new chip, then put the caret back so a run of entries flows.
+      this._focusKnown = e.currentTarget.dataset.skill;
+      this.render();
+    });
+    on(".known-input", "blur", (e) => {
+      if (commit(e.currentTarget)) this.render();
+    });
+
+    if (this._focusKnown) {
+      const input = html.querySelector(`.known-input[data-skill="${this._focusKnown}"]`);
+      this._focusKnown = null;
+      input?.focus();
+    }
+  }
+
+  /** Open the member picker for one group, writing the result back into the draft. */
+  static #onSelectItems(event, target) {
+    const index = Number(target.dataset.index);
+    const group = this.draft[index];
+    // Only one picker at a time, so a second click can't leave an orphaned window
+    // writing into a stale index.
+    this._picker?.close();
+    this._picker = new TokenRandomizerSubSkillPicker({
+      groupId: group.id,
+      skillKey: group.skill,
+      groupName: group.name,
+      names: group.members,
+      onSubmit: (picked) => {
+        this.draft[index].members = picked;
+        this.render();
+      }
+    });
+    this._picker.render(true);
+  }
+
+  // Both toggles flip the class in place rather than re-rendering, so a half-typed
+  // speciality in a sibling input isn't thrown away.
+  static #onToggleGroup(event, target) {
+    const id = target.dataset.id;
+    if (this.collapsedGroups.has(id)) this.collapsedGroups.delete(id);
+    else this.collapsedGroups.add(id);
+    target.closest(".group-item")?.classList.toggle("collapsed");
+  }
+
+  static #onToggleKnown(event, target) {
+    const key = target.dataset.skill;
+    if (this.collapsedKnown.has(key)) this.collapsedKnown.delete(key);
+    else this.collapsedKnown.add(key);
+    target.closest(".known-block")?.classList.toggle("collapsed");
+  }
+
+  static #onRemoveMember(event, target) {
+    const index = Number(target.dataset.index);
+    const name = target.dataset.name;
+    this.draft[index].members = groupMembers(this.draft[index]).filter(n => n !== name);
+    this.render();
+  }
+
+  static #onRemoveKnown(event, target) {
+    const { skill, name } = target.dataset;
+    this.knownDraft[skill] = (this.knownDraft[skill] ?? []).filter(n => n !== name);
+    this.render();
+  }
+
+  /** Refill the autocomplete lists with the shipped ones (committed on Save). */
+  static async #onRestoreKnown(event, target) {
+    const ok = await foundry.applications.api.DialogV2.confirm({
+      window: { title: game.i18n.localize("TR.Dialog.RestoreKnown.Title") },
+      content: game.i18n.localize("TR.Dialog.RestoreKnown.Content")
+    });
+    if (!ok) return;
+    this.knownDraft = {};
+    for (const [key, value] of Object.entries(DEFAULT_KNOWN_SUBSKILLS)) {
+      this.knownDraft[key] = parseSubSkillList(value);
+    }
+    this.render();
+  }
+
+  static #onAddGroup(event, target) {
+    const arbitrary = pf1?.config?.arbitrarySkills ?? FALLBACK_ARBITRARY_SKILLS;
+    this.draft.push({ id: `group-${foundry.utils.randomID()}`, name: "", skill: arbitrary[0], members: [] });
+    this.render();
+  }
+
+  static async #onRemoveGroup(event, target) {
+    const index = Number(target.dataset.index);
+    const group = this.draft[index];
+    const safe = foundry.utils.escapeHTML?.(group?.name ?? "") ?? group?.name ?? "";
+    const ok = await foundry.applications.api.DialogV2.confirm({
+      window: { title: game.i18n.localize("TR.Dialog.DeleteSubSkillGroup.Title") },
+      content: game.i18n.format("TR.Dialog.DeleteSubSkillGroup.Content", { name: safe })
+    });
+    if (!ok) return;
+    this.draft.splice(index, 1);
+    this.render();
+  }
+
+  static async #onSave(event, target) {
+    const cleaned = [];
+    const seen = new Set();
+    for (let i = 0; i < this.draft.length; i++) {
+      const row = this.draft[i];
+      const name = String(row.name ?? "").trim();
+      if (!name) {
+        ui.notifications?.warn(game.i18n.format("TR.Notif.SubSkillGroupNeedsName", { num: i + 1 }));
+        return;
+      }
+      // Names are scoped to their parent skill, so "Smithing" under Craft and under
+      // Profession can coexist; two Craft Smithings cannot.
+      const key = `${row.skill}|${name.toLowerCase()}`;
+      if (seen.has(key)) {
+        ui.notifications?.warn(game.i18n.format("TR.Notif.SubSkillGroupDuplicate", { name, skill: skillLabel(row.skill) }));
+        return;
+      }
+      seen.add(key);
+      const members = groupMembers(row);
+      if (!members.length) {
+        ui.notifications?.warn(game.i18n.format("TR.Notif.SubSkillGroupNeedsMembers", { name }));
+        return;
+      }
+      cleaned.push({ id: row.id ?? `group-${foundry.utils.randomID()}`, name, skill: row.skill, members });
+    }
+    // Store the autocomplete lists as clean arrays, dropping skills left empty.
+    const known = {};
+    for (const [key, value] of Object.entries(this.knownDraft)) {
+      const names = parseSubSkillList(value);
+      if (names.length) known[key] = names;
+    }
+
+    await game.settings.set(MODULE_ID, "subskill-groups", cleaned);
+    await game.settings.set(MODULE_ID, "known-subskills", known);
+    ui.notifications?.info(
+      cleaned.length === 1
+        ? game.i18n.localize("TR.Notif.SubSkillGroupsSavedOne")
+        : game.i18n.format("TR.Notif.SubSkillGroupsSavedMany", { count: cleaned.length })
+    );
+    this.close();
+  }
+
+  static #onCancel(event, target) {
+    this.close();
+  }
+}
+
 // ─── Header Button Hook ────────────────────────────────────────────────────────
 
 Hooks.on("getActorSheetHeaderButtons", (sheet, buttons) => {
@@ -1814,6 +3408,8 @@ Hooks.on("createToken", async (tokenDoc, options, userId) => {
   if (tokenDoc.getFlag(MODULE_ID, "randomized")) return;
 
   await randomizeTokenAbilityScores(tokenDoc);
+  // Skills must follow abilities: the rank budget is derived from Intelligence.
+  await randomizeTokenSkills(tokenDoc);
   await randomizeTokenName(tokenDoc);
   await randomizeTokenTreasure(tokenDoc);
 
@@ -1935,7 +3531,17 @@ Hooks.once("setup", () => {
     shouldObscure,
     getDisplayName,
     getSpeakerDisplayName,
+    // Skill randomizer internals, exposed so a GM can check what an actor would get
+    // without placing a token.
+    computeSkillBudget,
+    skillRankCap,
+    buildSkillSlots,
   });
+});
+
+// Settings writes need a logged-in GM, so the one-time speciality seed waits for `ready`.
+Hooks.once("ready", () => {
+  seedKnownSubSkills().catch(err => console.error(`${LOG} Seeding speciality lists failed.`, err));
 });
 
 // Chat: swap the speaker name in the message header (core `<h4 class="message-sender">`)
@@ -2069,6 +3675,55 @@ Hooks.once("init", () => {
     }
   });
 
+  game.settings.register(MODULE_ID, "skill-randomizer-defaults", {
+    name: "TR.Settings.SkillDefaults.Name",
+    hint: "TR.Settings.SkillDefaults.Hint",
+    scope: "world",
+    config: false,
+    type: Object,
+    default: foundry.utils.deepClone(SKILL_DEFAULTS)
+  });
+
+  // Named snapshots of a Skills-tab config. Saveable from either the per-actor dialog or
+  // the defaults dialog; only the Manage Skill Profiles menu can rename or delete one.
+  game.settings.register(MODULE_ID, "skill-profiles", {
+    name: "TR.Settings.SkillProfiles.Name",
+    hint: "TR.Settings.SkillProfiles.Hint",
+    scope: "world",
+    config: false,
+    type: Array,
+    default: []
+  });
+
+  // Named member lists a Craft/Perform/Profession/Art/Lore entry can draw one subskill
+  // from. Each declares the parent skill it belongs to.
+  game.settings.register(MODULE_ID, "subskill-groups", {
+    name: "TR.Settings.SubSkillGroups.Name",
+    hint: "TR.Settings.SubSkillGroups.Hint",
+    scope: "world",
+    config: false,
+    type: Array,
+    default: []
+  });
+
+  // Autocomplete source for subskill name fields: { <arbitrary skill key>: "a; b; c" }.
+  game.settings.register(MODULE_ID, "known-subskills", {
+    name: "TR.Settings.KnownSubSkills.Name",
+    hint: "TR.Settings.KnownSubSkills.Hint",
+    scope: "world",
+    config: false,
+    type: Object,
+    default: foundry.utils.deepClone(DEFAULT_KNOWN_SUBSKILLS)
+  });
+
+  // Which seed revision this world has taken; see seedKnownSubSkills().
+  game.settings.register(MODULE_ID, "known-subskills-seed", {
+    scope: "world",
+    config: false,
+    type: Number,
+    default: 0
+  });
+
   game.settings.register(MODULE_ID, "custom-stat-methods", {
     name: "TR.Settings.CustomStatMethods.Name",
     hint: "TR.Settings.CustomStatMethods.Hint",
@@ -2128,8 +3783,28 @@ Hooks.once("init", () => {
     type: TokenRandomizerStatMethods,
     restricted: true
   });
+
+  game.settings.registerMenu(MODULE_ID, "randomizer-skill-profiles-menu", {
+    name: "TR.Menu.SkillProfiles.Name",
+    label: "TR.Menu.SkillProfiles.Label",
+    hint: "TR.Menu.SkillProfiles.Hint",
+    icon: "fas fa-book",
+    type: TokenRandomizerSkillProfiles,
+    restricted: true
+  });
+
+  game.settings.registerMenu(MODULE_ID, "randomizer-subskill-groups-menu", {
+    name: "TR.Menu.SubSkillGroups.Name",
+    label: "TR.Menu.SubSkillGroups.Label",
+    hint: "TR.Menu.SubSkillGroups.Hint",
+    icon: "fas fa-layer-group",
+    type: TokenRandomizerSubSkillGroups,
+    restricted: true
+  });
 });
 
 window.TokenRandomizerSettings = TokenRandomizerSettings;
 window.TokenRandomizerListManager = TokenRandomizerListManager;
 window.TokenRandomizerStatMethods = TokenRandomizerStatMethods;
+window.TokenRandomizerSkillProfiles = TokenRandomizerSkillProfiles;
+window.TokenRandomizerSubSkillGroups = TokenRandomizerSubSkillGroups;
