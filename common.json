@@ -1,0 +1,7 @@
+{
+  "dest": "src/common",
+  "files": [
+    "elements/dual-range.mjs",
+    "elements/dual-range.css"
+  ]
+}

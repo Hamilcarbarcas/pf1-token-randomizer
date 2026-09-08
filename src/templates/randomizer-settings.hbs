@@ -55,16 +55,18 @@
       <div class="constraints-grid">
         <div class="constraint-header">
           <span class="ability-name-header">{{localize "TR.Col.Ability"}}</span>
-          <span class="min-header">{{localize "TR.Col.Min"}}</span>
-          <span class="max-header">{{localize "TR.Col.Max"}}</span>
+          <span class="range-header">{{localize "TR.Col.Range"}}</span>
           <span class="priority-header {{#unless prioritizeEnabled}}disabled{{/unless}}">{{localize "TR.Col.Priority"}}</span>
           <span class="nil-header">{{localize "TR.Col.Nil"}}</span>
         </div>
         {{#each abilities}}
         <div class="constraint-row">
           <span class="ability-name">{{name}}</span>
-          <input type="number" class="ability-min" data-ability="{{key}}" value="{{min}}" min="0" max="18" {{#if nil}}disabled{{/if}} {{#unless ../abilityEnabled}}disabled{{/unless}} />
-          <input type="number" class="ability-max" data-ability="{{key}}" value="{{max}}" min="0" max="25" {{#if nil}}disabled{{/if}} {{#unless ../abilityEnabled}}disabled{{/unless}} />
+          <pf1-token-randomizer-dual-range class="ability-range" data-ability="{{key}}"
+            min="0" max="25" step="1" padding="1" value="{{min}},{{max}}"
+            aria-label-min="{{localize "TR.Ability.RangeMin" ability=name}}"
+            aria-label-max="{{localize "TR.Ability.RangeMax" ability=name}}"
+            {{#if nil}}disabled{{/if}} {{#unless ../abilityEnabled}}disabled{{/unless}}></pf1-token-randomizer-dual-range>
           <input type="number" class="ability-priority {{#unless ../prioritizeEnabled}}disabled{{/unless}}" data-ability="{{key}}" value="{{#if ../prioritizeEnabled}}{{priority}}{{/if}}" min="0" max="6" placeholder="-" {{#if nil}}disabled{{/if}} {{#unless ../prioritizeEnabled}}disabled{{/unless}} />
           <input type="checkbox" class="ability-nil" data-ability="{{key}}" {{#if nil}}checked{{/if}} {{#unless ../abilityEnabled}}disabled{{/unless}} />
         </div>

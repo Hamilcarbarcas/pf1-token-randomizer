@@ -1,0 +1,272 @@
+<div class="token-randomizer-encounter-body" data-drop-target="">
+
+  {{!-- ═══════════ Header ═══════════ --}}
+  <div class="settings-section encounter-header">
+    <div class="setting-row encounter-name-row">
+      <label>{{localize "TR.Encounter.Name"}}</label>
+      <input type="text" class="encounter-name" value="{{name}}" placeholder="{{localize "TR.Encounter.NamePlaceholder"}}" />
+    </div>
+
+    <div class="encounter-cr-readout">
+      <span class="encounter-stat">
+        <span class="encounter-stat-value">{{memberCount}}</span>
+        <span class="encounter-stat-label">{{localize "TR.Encounter.RowMeta.Members"}}</span>
+      </span>
+      <span class="encounter-stat">
+        <span class="encounter-stat-value">{{totalXP}}</span>
+        <span class="encounter-stat-label">{{localize "TR.Encounter.XP"}}</span>
+      </span>
+      <span class="encounter-stat encounter-stat-cr">
+        <span class="encounter-stat-value">{{cr}}</span>
+        <span class="encounter-stat-label">{{localize "TR.Encounter.CR"}}</span>
+      </span>
+    </div>
+    {{#if missingCount}}
+    <p class="hint encounter-warn">{{localize "TR.Encounter.MissingMembers"}}</p>
+    {{/if}}
+    {{#if exceedsTable}}
+    <p class="hint encounter-warn">{{localize "TR.Encounter.AboveTable"}}</p>
+    {{/if}}
+
+    <div class="encounter-pace">
+      <button type="button" class="pace-btn {{#if paceIsSlow}}active{{/if}}" data-action="setPace" data-pace="slow">{{localize "TR.Encounter.Pace.Slow"}}</button>
+      <button type="button" class="pace-btn {{#if paceIsMedium}}active{{/if}}" data-action="setPace" data-pace="medium">{{localize "TR.Encounter.Pace.Medium"}}</button>
+      <button type="button" class="pace-btn {{#if paceIsFast}}active{{/if}}" data-action="setPace" data-pace="fast">{{localize "TR.Encounter.Pace.Fast"}}</button>
+    </div>
+
+    <div class="encounter-budget-row">
+      <div class="encounter-budget-fig">
+        <span class="encounter-stat-label">{{localize "TR.Encounter.Budget"}}</span>
+        <span class="encounter-stat-value">{{budget}} gp</span>
+      </div>
+      <div class="encounter-budget-fig">
+        <span class="encounter-stat-label">{{localize "TR.Encounter.Carried"}}</span>
+        <span class="encounter-stat-value">{{carried}} gp</span>
+      </div>
+      <div class="encounter-budget-fig encounter-budget-target">
+        <span class="encounter-stat-label">{{localize "TR.Encounter.ToGenerate"}}</span>
+        <span class="encounter-stat-value">{{toGenerate}} gp</span>
+      </div>
+    </div>
+    {{#if overFunded}}
+    <p class="hint encounter-warn">{{localize "TR.Encounter.OverFunded"}} {{overFunded}} gp.</p>
+    {{/if}}
+
+    <div class="encounter-overrides">
+      <label>{{localize "TR.Encounter.CROverride"}}
+        <input type="text" class="encounter-cr-override" value="{{crOverride}}" placeholder="{{derivedCR}}" />
+      </label>
+      <label>{{localize "TR.Encounter.BudgetOverride"}}
+        <input type="text" class="encounter-budget-override" value="{{budgetOverride}}" placeholder="{{budget}}" />
+      </label>
+    </div>
+
+    <div class="encounter-count-existing-row">
+      <span class="encounter-stat-label">{{localize "TR.Encounter.CountExisting"}}</span>
+      <label><input type="checkbox" class="encounter-count-existing" data-key="equipped" {{#if countExisting.equipped}}checked{{/if}} /> {{localize "TR.Encounter.Part.equippedGear"}}</label>
+      <label><input type="checkbox" class="encounter-count-existing" data-key="coins" {{#if countExisting.coins}}checked{{/if}} /> {{localize "TR.Encounter.Part.coins"}}</label>
+      <label><input type="checkbox" class="encounter-count-existing" data-key="consumables" {{#if countExisting.consumables}}checked{{/if}} /> {{localize "TR.Encounter.Part.consumables"}}</label>
+    </div>
+    <p class="hint encounter-carried-parts">
+      {{#each carriedParts}}<span class="encounter-part">{{label}}: {{value}} gp</span>{{/each}}
+    </p>
+  </div>
+
+  {{!-- ═══════════ Members ═══════════ --}}
+  <div class="settings-section encounter-members-section">
+    <h3>{{localize "TR.Encounter.Members"}}</h3>
+    <p class="hint">{{{localize "TR.Encounter.MembersHint"}}}</p>
+    <div class="encounter-member-actions">
+      <button type="button" class="encounter-btn" data-action="addSelected"><i class="fas fa-crosshairs"></i> {{localize "TR.Encounter.AddSelected"}}</button>
+      <button type="button" class="encounter-btn" data-action="addCombatants"><i class="fas fa-swords"></i> {{localize "TR.Encounter.AddCombatants"}}</button>
+    </div>
+    <div class="encounter-member-list">
+      {{#each members}}
+      <div class="encounter-member {{#if missing}}is-missing{{/if}}">
+        {{#if img}}<img src="{{img}}" alt="" />{{/if}}
+        <span class="encounter-member-name {{#unless missing}}encounter-open-actor{{/unless}}" data-uuid="{{tokenUuid}}" title="{{localize "TR.Encounter.OpenActor"}}">{{name}}{{#if missing}} <em>{{localize "TR.Encounter.Missing"}}</em>{{/if}}</span>
+        <span class="encounter-member-cr">{{localize "TR.Encounter.CR"}} {{crLabel}}</span>
+        <button type="button" class="segment-btn segment-btn-danger" data-action="removeMember" data-index="{{index}}"><i class="fas fa-times"></i></button>
+      </div>
+      {{else}}
+      <p class="hint no-methods-hint">{{localize "TR.Encounter.NoMembers"}}</p>
+      {{/each}}
+    </div>
+  </div>
+
+  {{!-- ═══════════ Weights ═══════════ --}}
+  <div class="settings-section encounter-weights-section" data-drop-target="">
+    <h3>{{localize "TR.Encounter.Categories"}} <span class="encounter-coin-total">{{localize "TR.Encounter.Available"}} {{available}} gp</span></h3>
+    <p class="hint">{{{localize "TR.Encounter.CategoriesHint"}}}</p>
+
+    <div class="encounter-profile-bar">
+      <span class="encounter-stat-label">{{localize "TR.Hoard.Profile"}}</span>
+      <select class="encounter-profile-select">
+        <option value="">{{localize "TR.Hoard.None"}}</option>
+        {{#each profiles}}
+        <option value="{{id}}" {{#if selected}}selected{{/if}}>{{name}}</option>
+        {{/each}}
+      </select>
+      <button type="button" class="encounter-btn" data-action="loadProfile">{{localize "TR.Hoard.Load"}}</button>
+      <button type="button" class="encounter-btn" data-action="saveProfile">{{localize "TR.Hoard.Save"}}</button>
+      <button type="button" class="segment-btn segment-btn-danger" data-action="deleteProfile" title="{{localize "TR.Hoard.Delete"}}"><i class="fas fa-trash"></i></button>
+      {{#if profileName}}<span class="encounter-profile-stamp">{{profileName}}{{#if profileDiverged}} <em>{{localize "TR.Hoard.Modified"}}</em>{{/if}}</span>{{/if}}
+    </div>
+
+    <div class="encounter-category-head">
+      <span></span>
+      <span class="encounter-stat-label">{{localize "TR.Encounter.Chance"}}</span>
+      <span class="encounter-stat-label">{{localize "TR.Encounter.ItemWeight"}}</span>
+      <span class="encounter-stat-label">{{localize "TR.Encounter.CategoryValue"}}</span>
+    </div>
+    {{#each categories}}
+    <div class="encounter-category-row {{#unless enabled}}is-off{{/unless}}">
+      <span class="encounter-category-name">
+        <input type="checkbox" class="encounter-category-toggle" data-action="toggleCategory" data-category="{{id}}" {{#if enabled}}checked{{/if}} title="{{localize "TR.Encounter.CategoryEnabled"}}" />
+        <i class="fas {{icon}}"></i> {{name}}
+        {{#unless hasSources}}<em class="encounter-nosource">{{localize "TR.Encounter.NoSources"}}</em>{{/unless}}
+      </span>
+      <span class="encounter-slider-cell" title="{{localize "TR.Encounter.ChanceHint"}}">
+        <input type="range" class="encounter-chance" data-category="{{id}}" min="1" max="10" value="{{chance}}" />
+        <span class="chance-value" data-category="{{id}}">{{chancePct}}</span>
+      </span>
+      {{#unless isCoinSink}}
+      <pf1-token-randomizer-dual-range class="encounter-item-weight" data-category="{{id}}"
+        min="1" max="10" step="1" padding="1" readout="none" value="{{itemWeightMin}},{{itemWeightMax}}"
+        title="{{localize "TR.Encounter.ItemWeightHint"}}"
+        aria-label-min="{{localize "TR.Encounter.ItemWeightMin"}}"
+        aria-label-max="{{localize "TR.Encounter.ItemWeightMax"}}"></pf1-token-randomizer-dual-range>
+      {{else}}
+      <span class="encounter-slider-cell"></span>
+      {{/unless}}
+      <pf1-token-randomizer-dual-range class="encounter-cat-value" data-category="{{id}}"
+        min="0" max="100" step="5" padding="5" readout="none" value="{{valueMin}},{{valueMax}}"
+        title="{{localize "TR.Encounter.CategoryValueHint"}}"
+        aria-label-min="{{localize "TR.Encounter.CategoryValueMin"}}"
+        aria-label-max="{{localize "TR.Encounter.CategoryValueMax"}}"></pf1-token-randomizer-dual-range>
+    </div>
+    {{/each}}
+
+    <div class="encounter-generate-row">
+      <button type="button" class="settings-ok-btn" data-action="generate"><i class="fas fa-dice"></i> {{localize "TR.Encounter.Generate"}}</button>
+      <button type="button" class="settings-cancel-btn" data-action="resetDraft"><i class="fas fa-rotate-left"></i> {{localize "TR.Encounter.Reset"}}</button>
+    </div>
+  </div>
+
+  {{!-- ═══════════ Unassigned tray (pinned, §17.1) ═══════════ --}}
+  <div class="settings-section encounter-tray-section" data-drop-target="">
+    <h3>{{localize "TR.Encounter.Unassigned"}}</h3>
+    <div class="encounter-tray">
+      {{#each tray}}
+      <div class="encounter-line" draggable="true" data-line-id="{{id}}">
+        {{#if img}}<img src="{{img}}" alt="" />{{/if}}
+        <span class="encounter-line-name encounter-open-item" data-uuid="{{uuid}}" title="{{localize "TR.Encounter.OpenItem"}}">{{name}}{{#if qtyLabel}} {{qtyLabel}}{{/if}}</span>
+        <span class="encounter-line-value">{{valueLabel}} gp</span>
+        <span class="encounter-line-controls">
+          <button type="button" class="segment-btn" data-action="rerollLine" data-line-id="{{id}}" title="{{localize "TR.Encounter.Reroll"}}"><i class="fas fa-dice-d20"></i></button>
+          <button type="button" class="segment-btn {{#if locked}}is-locked{{/if}}" data-action="toggleLock" data-line-id="{{id}}" title="{{localize "TR.Encounter.Lock"}}"><i class="fas {{#if locked}}fa-lock{{else}}fa-lock-open{{/if}}"></i></button>
+          <button type="button" class="segment-btn segment-btn-danger" data-action="deleteLine" data-line-id="{{id}}"><i class="fas fa-trash"></i></button>
+        </span>
+      </div>
+      {{else}}
+      <p class="hint no-methods-hint">{{#if hasLines}}{{localize "TR.Encounter.TrayEmptyAllPlaced"}}{{else}}{{localize "TR.Encounter.TrayEmpty"}}{{/if}}</p>
+      {{/each}}
+    </div>
+  </div>
+
+  {{!-- ═══════════ Bulk distribution (between tray and targets) ═══════════ --}}
+  <div class="encounter-bulk-strip">
+    <span class="encounter-stat-label">{{localize "TR.Encounter.Distribute"}}</span>
+    <button type="button" class="encounter-btn" data-action="bulkDistribute" data-mode="even">{{localize "TR.Encounter.Bulk.Even"}}</button>
+    <button type="button" class="encounter-btn" data-action="bulkDistribute" data-mode="random">{{localize "TR.Encounter.Bulk.Random"}}</button>
+    <button type="button" class="encounter-btn" data-action="bulkDistribute" data-mode="byCR">{{localize "TR.Encounter.Bulk.ByCR"}}</button>
+    <button type="button" class="encounter-btn" data-action="returnAll">{{localize "TR.Encounter.Bulk.ReturnAll"}}</button>
+  </div>
+
+  {{!-- ═══════════ Target strip ═══════════ --}}
+  <div class="settings-section encounter-targets-section">
+    <h3>{{localize "TR.Encounter.Targets"}}</h3>
+    {{#if hasTargets}}
+    <div class="encounter-target-strip">
+      {{#each targets}}
+      <div class="encounter-target {{#if locked}}is-locked-target{{/if}}" data-drop-target="{{id}}">
+        <div class="encounter-target-head">
+          <button type="button" class="segment-btn encounter-coin-lock {{#if coinExcluded}}is-locked{{/if}}" data-action="toggleCoinLock" data-id="{{id}}" title="{{localize "TR.Encounter.CoinLock"}}"><i class="fas {{#if coinExcluded}}fa-sack-xmark{{else}}fa-sack-dollar{{/if}}"></i></button>
+          {{#if img}}<img src="{{img}}" alt="" />{{/if}}
+          <span class="encounter-target-name encounter-open-actor" data-uuid="{{id}}" title="{{localize "TR.Encounter.OpenActor"}}">{{name}}</span>
+          <span class="encounter-target-cr">{{crLabel}}</span>
+        </div>
+        <div class="encounter-target-lines">
+          {{#each lines}}
+          <div class="encounter-line encounter-line-compact" draggable="true" data-line-id="{{id}}">
+            <span class="encounter-line-name encounter-open-item" data-uuid="{{uuid}}" title="{{localize "TR.Encounter.OpenItem"}}">{{name}}{{#if qtyLabel}} {{qtyLabel}}{{/if}}</span>
+            <span class="encounter-line-value">{{valueLabel}}</span>
+            <button type="button" class="segment-btn {{#if pinned}}is-locked{{/if}}" data-action="togglePin" data-line-id="{{id}}" title="{{localize "TR.Encounter.PinLine"}}"><i class="fas {{#if pinned}}fa-thumbtack{{else}}fa-thumbtack-slash{{/if}}"></i></button>
+            <button type="button" class="segment-btn" data-action="unassignLine" data-line-id="{{id}}" title="{{localize "TR.Encounter.Unassign"}}"><i class="fas fa-arrow-up"></i></button>
+          </div>
+          {{else}}
+          <p class="hint encounter-target-empty">{{localize "TR.Encounter.DropHere"}}</p>
+          {{/each}}
+        </div>
+        <button type="button" class="segment-btn encounter-target-lock {{#if locked}}is-locked{{/if}}" data-action="toggleTargetLock" data-id="{{id}}" title="{{localize "TR.Encounter.LockTarget"}}"><i class="fas {{#if locked}}fa-lock{{else}}fa-lock-open{{/if}}"></i></button>
+      </div>
+      {{/each}}
+    </div>
+    {{else}}
+    <p class="hint no-methods-hint">{{localize "TR.Encounter.NoTargets"}}</p>
+    {{/if}}
+  </div>
+
+  {{!-- ═══════════ Currency ═══════════ --}}
+  <div class="settings-section encounter-currency-section">
+    <h3>{{localize "TR.Encounter.Currency"}} <span class="encounter-coin-total">{{coinValue}} gp</span></h3>
+    <p class="hint">{{{localize "TR.Encounter.CurrencyHint"}}}</p>
+    {{#if overBudget}}
+    <p class="encounter-overbudget">{{localize "TR.Encounter.OverBudget"}} {{overBudget}} gp.</p>
+    {{/if}}
+
+    <div class="encounter-coin-line">
+      {{#each denomWeights}}
+      <div class="encounter-denom">
+        <span class="encounter-denom-label">{{label}}</span>
+        <input type="range" class="encounter-denom-weight" data-coin="{{key}}" min="0" max="100" value="{{weight}}" />
+        <span class="encounter-coin-count" data-coin="{{key}}">{{count}}</span>
+      </div>
+      {{/each}}
+      <div class="encounter-denom encounter-denom-random" title="{{localize "TR.Encounter.DenomRandomnessHint"}}">
+        <span class="encounter-denom-label">{{localize "TR.Encounter.DenomRandomness"}}</span>
+        <input type="range" class="encounter-denom-randomness" min="0" max="100" value="{{denomRandomness}}" />
+        <span class="encounter-coin-count" aria-hidden="true">&nbsp;</span>
+      </div>
+    </div>
+
+    <div class="encounter-bulk-actions">
+      <button type="button" class="encounter-btn" data-action="splitCoins" data-mode="even">{{localize "TR.Encounter.Bulk.Even"}}</button>
+      <button type="button" class="encounter-btn" data-action="splitCoins" data-mode="byCR">{{localize "TR.Encounter.Bulk.ByCR"}}</button>
+      <span class="encounter-inline-slider encounter-inline-left" title="{{localize "TR.Encounter.SplitRandomnessHint"}}">
+        <span class="encounter-denom-label">{{localize "TR.Encounter.SplitRandomness"}}</span>
+        <input type="range" class="encounter-split-randomness" min="0" max="100" value="{{splitRandomness}}" />
+      </span>
+    </div>
+    <div class="encounter-split-list">
+      {{#each currencySplit}}
+      <div class="encounter-split-row">
+        <span class="encounter-split-name">{{name}}</span>
+        <span class="encounter-split-value">({{valueLabel}} gp)</span>
+        <span class="encounter-split-coins">{{coins.pp}} pp &middot; {{coins.gp}} gp &middot; {{coins.sp}} sp &middot; {{coins.cp}} cp</span>
+      </div>
+      {{/each}}
+    </div>
+  </div>
+
+  {{!-- ═══════════ Apply ═══════════ --}}
+  <div class="encounter-apply-bar">
+    {{#if isApplied}}
+    <span class="encounter-applied-note"><i class="fas fa-check"></i> {{localize "TR.Encounter.AppliedOn"}} {{appliedWhen}}</span>
+    <button type="button" class="settings-cancel-btn" data-action="undoLoot"><i class="fas fa-rotate-left"></i> {{localize "TR.Encounter.Undo"}}</button>
+    {{else}}
+    <span class="encounter-apply-summary">{{plan.itemCount}} {{localize "TR.Encounter.RowMeta.Items"}} &rarr; {{plan.targets}} {{localize "TR.Encounter.RowMeta.Members"}}{{#if plan.unassignedCount}} &middot; <em class="encounter-warn">{{plan.unassignedCount}} {{localize "TR.Encounter.StillUnassigned"}}</em>{{/if}}</span>
+    <button type="button" class="settings-ok-btn" data-action="applyLoot"><i class="fas fa-check"></i> {{localize "TR.Encounter.Apply"}}</button>
+    {{/if}}
+  </div>
+</div>

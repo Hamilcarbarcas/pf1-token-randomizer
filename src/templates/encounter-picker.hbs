@@ -1,0 +1,37 @@
+<div class="token-randomizer-encounter-picker">
+  <div class="settings-section">
+    <h3>{{localize "TR.Encounter.PickerTitle"}}</h3>
+    <p class="hint">{{{localize "TR.Encounter.PickerIntro"}}}</p>
+
+    <div class="encounter-list">
+      {{#each encounters}}
+      <div class="encounter-row" data-id="{{id}}">
+        <div class="encounter-row-main">
+          <span class="encounter-row-name">{{name}}</span>
+          <span class="encounter-row-meta">
+            {{localize "TR.Encounter.RowMeta.CR"}} {{cr}} &middot;
+            {{members}} {{localize "TR.Encounter.RowMeta.Members"}} &middot;
+            {{lines}} {{localize "TR.Encounter.RowMeta.Items"}} &middot;
+            {{budget}} gp
+            {{#if applied}}<span class="encounter-applied-tag">{{localize "TR.Encounter.Applied"}}</span>{{/if}}
+          </span>
+        </div>
+        <div class="encounter-row-controls">
+          <button type="button" class="segment-btn" data-action="openEncounter" data-id="{{id}}" title="{{localize "TR.Encounter.Open"}}"><i class="fas fa-folder-open"></i></button>
+          <button type="button" class="segment-btn segment-btn-danger" data-action="deleteEncounter" data-id="{{id}}" data-name="{{name}}" title="{{localize "TR.Encounter.Delete"}}"><i class="fas fa-trash"></i></button>
+        </div>
+      </div>
+      {{else}}
+      <p class="hint no-methods-hint">{{localize "TR.Encounter.NoEncounters"}}</p>
+      {{/each}}
+    </div>
+  </div>
+
+  <div class="settings-actions">
+    <div class="action-buttons">
+      <button type="button" class="settings-ok-btn" data-action="newEncounter">
+        <i class="fas fa-plus"></i> {{localize "TR.Encounter.New"}}
+      </button>
+    </div>
+  </div>
+</div>

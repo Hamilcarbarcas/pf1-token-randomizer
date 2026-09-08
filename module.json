@@ -22,9 +22,10 @@
     ]
   },
   "esmodules": [
-    "src/scripts/token-randomizer.mjs"
+    "src/scripts/main.mjs"
   ],
   "styles": [
+    "src/common/elements/dual-range.css",
     "src/styles/token-randomizer.css"
   ],
   "languages": [

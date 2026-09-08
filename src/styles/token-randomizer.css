@@ -10,16 +10,25 @@
 
 .pf1-token-randomizer {
   --tr-accent: #e8a63e;
+  /* The dual-knob sliders take this window's accent rather than core's, so their
+     selected band matches the tab underline and the enable-row highlights. */
+  --cmn-dr-fill-color: var(--tr-accent);
 }
 
 /* All three randomizer windows use height: "auto", so the frame grows to fit its
    content with no upper bound — a tall tab (e.g. the Name builder) can run off the
    bottom of the screen, hiding content and the Save/Cancel buttons. Cap the content
    area to the viewport and let it scroll instead. Applies to every window carrying
-   the shared frame class. */
+   the shared frame class.
+
+   Reserve the scrollbar gutter unconditionally: without it a tall tab (Name) gains a
+   scrollbar that a short one (Skills) does not, so the content box — and with it the tab
+   bar — is ~15px narrower on some tabs than others, and a label sitting near its wrap
+   point breaks to two lines on those tabs only. */
 .pf1-token-randomizer .window-content {
   max-height: calc(100vh - 100px);
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 
 .pf1-token-randomizer .token-randomizer-settings {
@@ -36,7 +45,9 @@
 }
 
 /* Tall enough that a two-line label ("Ability Scores" at four tabs wide) sits level with
-   the single-line ones instead of pushing the row around. */
+   the single-line ones instead of pushing the row around. The tight font and padding keep
+   the longest label on one line at any width the window is likely to be dragged to; below
+   that it still wraps, into the height already reserved. */
 .pf1-token-randomizer .randomizer-tab-btn {
   flex: 1;
   display: flex;
@@ -44,14 +55,14 @@
   justify-content: center;
   gap: 4px;
   min-height: 44px;
-  padding: 4px 6px;
+  padding: 4px 3px;
   border: none;
   border-bottom: 2px solid transparent;
   border-radius: 0;
   background: none;
   color: rgba(255, 255, 255, 0.5);
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.15;
   font-weight: 600;
   margin-bottom: -2px;
@@ -183,7 +194,7 @@
 
 .pf1-token-randomizer .constraint-header {
   display: grid;
-  grid-template-columns: 1fr 54px 54px 54px 40px;
+  grid-template-columns: minmax(64px, 0.9fr) minmax(170px, 1.7fr) 50px 34px;
   gap: 8px;
   font-weight: bold;
   font-size: 12px;
@@ -194,7 +205,7 @@
 
 .pf1-token-randomizer .constraint-row {
   display: grid;
-  grid-template-columns: 1fr 54px 54px 54px 40px;
+  grid-template-columns: minmax(64px, 0.9fr) minmax(170px, 1.7fr) 50px 34px;
   gap: 8px;
   padding: 4px 8px;
   background: rgba(255, 255, 255, 0.03);
@@ -210,14 +221,14 @@
   font-weight: 500;
 }
 
-.pf1-token-randomizer .ability-min,
-.pf1-token-randomizer .ability-max {
-  width: 100%;
-  text-align: center;
+/* Narrower than the shared default: the ability domain is two digits, and the
+   track needs the width more than the fields do. */
+.pf1-token-randomizer .ability-range .cmn-dr-value {
+  width: 2.6em;
+  padding: 0 2px;
 }
 
-.pf1-token-randomizer .min-header,
-.pf1-token-randomizer .max-header,
+.pf1-token-randomizer .range-header,
 .pf1-token-randomizer .priority-header,
 .pf1-token-randomizer .nil-header {
   text-align: center;
@@ -331,7 +342,9 @@
   border-left: 2px solid rgba(255, 255, 255, 0.15);
 }
 
-.tr-suboption.tr-disabled {
+/* A setting whose dependency is missing. Applied to the .form-group in the core
+   Configure Settings menu, so the class carries the whole selector on its own. */
+.tr-disabled {
   opacity: 0.5;
 }
 
@@ -1570,4 +1583,581 @@
   font-size: 12px;
   font-weight: 600;
   color: var(--tr-accent);
+}
+
+/* --- Encounter treasure (DESIGN.md §17) -----------------------------------
+   Every selector is scoped under .pf1-token-randomizer: this stylesheet is
+   unlayered and so outranks core's @layer rules, and a bare element or shared
+   class rule here would repaint the rest of the UI. */
+
+.pf1-token-randomizer .token-randomizer-encounter-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* header */
+.pf1-token-randomizer .encounter-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pf1-token-randomizer .encounter-name-row input {
+  flex: 1;
+}
+.pf1-token-randomizer .encounter-cr-readout {
+  display: flex;
+  gap: 18px;
+  align-items: baseline;
+  margin: 6px 0;
+}
+.pf1-token-randomizer .encounter-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 64px;
+}
+.pf1-token-randomizer .encounter-stat-value {
+  font-size: 1.35em;
+  font-weight: 600;
+}
+.pf1-token-randomizer .encounter-stat-cr .encounter-stat-value {
+  color: var(--tr-accent);
+  font-size: 1.7em;
+}
+.pf1-token-randomizer .encounter-stat-label {
+  font-size: 0.8em;
+  opacity: 0.7;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.pf1-token-randomizer .encounter-warn {
+  color: #e2a33c;
+}
+.pf1-token-randomizer .encounter-pace {
+  display: flex;
+  gap: 4px;
+  margin: 6px 0;
+}
+.pf1-token-randomizer .encounter-pace .pace-btn {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+  padding: 4px 6px;
+}
+.pf1-token-randomizer .encounter-pace .pace-btn.active {
+  background: rgba(232, 166, 62, 0.22);
+  border-color: var(--tr-accent);
+}
+.pf1-token-randomizer .encounter-budget-row {
+  display: flex;
+  gap: 12px;
+  margin: 6px 0;
+}
+.pf1-token-randomizer .encounter-budget-fig {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 3px;
+}
+.pf1-token-randomizer .encounter-budget-target {
+  border: 1px solid var(--tr-accent);
+}
+.pf1-token-randomizer .encounter-overrides {
+  display: flex;
+  gap: 12px;
+}
+.pf1-token-randomizer .encounter-overrides label {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pf1-token-randomizer .encounter-overrides input {
+  flex: 1;
+  min-width: 0;
+}
+.pf1-token-randomizer .encounter-count-existing-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+.pf1-token-randomizer .encounter-carried-parts {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.pf1-token-randomizer .encounter-part {
+  white-space: nowrap;
+}
+
+/* members */
+.pf1-token-randomizer .encounter-member-actions,
+.pf1-token-randomizer .encounter-bulk-actions,
+.pf1-token-randomizer .encounter-generate-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 6px 0;
+}
+.pf1-token-randomizer .encounter-total {
+  margin-left: auto;
+  opacity: 0.8;
+}
+.pf1-token-randomizer .encounter-member-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.pf1-token-randomizer .encounter-member {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 3px;
+}
+.pf1-token-randomizer .encounter-member img {
+  width: 26px;
+  height: 26px;
+  object-fit: cover;
+  border: none;
+  border-radius: 3px;
+}
+.pf1-token-randomizer .encounter-member-name {
+  flex: 1;
+}
+.pf1-token-randomizer .encounter-member.is-missing {
+  opacity: 0.55;
+}
+
+/* categories */
+.pf1-token-randomizer .encounter-category-row {
+  display: grid;
+  grid-template-columns: 1fr 130px 130px 190px;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+.pf1-token-randomizer .encounter-nosource {
+  opacity: 0.6;
+  font-size: 0.85em;
+  margin-left: 6px;
+}
+
+/* lines, tray and targets */
+.pf1-token-randomizer .encounter-tray {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-height: 44px;
+  padding: 4px;
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  border-radius: 3px;
+}
+.pf1-token-randomizer .encounter-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+  cursor: grab;
+}
+.pf1-token-randomizer .encounter-line.dragging {
+  opacity: 0.4;
+}
+.pf1-token-randomizer .encounter-line img {
+  width: 22px;
+  height: 22px;
+  object-fit: cover;
+  border: none;
+  border-radius: 2px;
+}
+.pf1-token-randomizer .encounter-line-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pf1-token-randomizer .encounter-line-value {
+  opacity: 0.85;
+  white-space: nowrap;
+}
+.pf1-token-randomizer .encounter-line-controls {
+  display: flex;
+  gap: 2px;
+}
+.pf1-token-randomizer .encounter-line .segment-btn.is-locked {
+  color: var(--tr-accent);
+}
+.pf1-token-randomizer [data-drop-target].drag-over {
+  outline: 2px solid var(--tr-accent);
+  outline-offset: -2px;
+}
+.pf1-token-randomizer .encounter-target-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+}
+.pf1-token-randomizer .encounter-target {
+  flex: 0 0 190px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+.pf1-token-randomizer .encounter-target-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pf1-token-randomizer .encounter-target-head img {
+  width: 28px;
+  height: 28px;
+  object-fit: cover;
+  border: none;
+  border-radius: 3px;
+}
+.pf1-token-randomizer .encounter-target-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pf1-token-randomizer .encounter-target-cr {
+  opacity: 0.7;
+  font-size: 0.85em;
+}
+.pf1-token-randomizer .encounter-target-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 40px;
+}
+.pf1-token-randomizer .encounter-line-compact {
+  font-size: 0.9em;
+  padding: 2px 4px;
+}
+.pf1-token-randomizer .encounter-target-empty {
+  opacity: 0.5;
+  font-size: 0.85em;
+  text-align: center;
+  margin: 8px 0;
+}
+
+/* currency */
+.pf1-token-randomizer .encounter-coin-pool {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.pf1-token-randomizer .encounter-coin-pool label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.pf1-token-randomizer .encounter-coin-pool input {
+  width: 80px;
+}
+.pf1-token-randomizer .encounter-split-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pf1-token-randomizer .encounter-split-row {
+  display: flex;
+  gap: 8px;
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 3px;
+}
+.pf1-token-randomizer .encounter-split-name {
+  flex: 1;
+}
+.pf1-token-randomizer .encounter-phase-note {
+  opacity: 0.6;
+  font-style: italic;
+}
+
+/* picker */
+.pf1-token-randomizer .encounter-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pf1-token-randomizer .encounter-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 3px;
+}
+.pf1-token-randomizer .encounter-row-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.pf1-token-randomizer .encounter-row-name {
+  font-weight: 600;
+}
+.pf1-token-randomizer .encounter-row-meta {
+  font-size: 0.85em;
+  opacity: 0.7;
+}
+.pf1-token-randomizer .encounter-row-controls {
+  display: flex;
+  gap: 3px;
+}
+.pf1-token-randomizer .encounter-applied-tag {
+  color: var(--tr-accent);
+  margin-left: 6px;
+}
+
+
+/* Text buttons in the encounter window. .segment-btn is a fixed 24x22 icon button, so
+   reusing it for a labelled button collapses the label; these size to their content. */
+.pf1-token-randomizer .encounter-btn {
+  width: auto;
+  height: auto;
+  flex: 0 0 auto;
+  padding: 3px 10px;
+  line-height: 1.5;
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.pf1-token-randomizer .encounter-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+.pf1-token-randomizer .encounter-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+/* The icon buttons that stay on .segment-btn must not be squeezed by their flex row. */
+.pf1-token-randomizer .encounter-line-controls .segment-btn,
+.pf1-token-randomizer .encounter-member .segment-btn,
+.pf1-token-randomizer .encounter-row-controls .segment-btn {
+  flex: 0 0 auto;
+}
+
+/* Coin denomination sliders and clickable names (encounter window). */
+.pf1-token-randomizer .encounter-coin-total {
+  float: right;
+  color: var(--tr-accent);
+  font-weight: 600;
+}
+.pf1-token-randomizer .encounter-overbudget {
+  margin: 4px 0;
+  padding: 4px 8px;
+  border-radius: 3px;
+  background: rgba(200, 60, 60, 0.22);
+  border: 1px solid rgba(220, 90, 90, 0.55);
+  color: #ffb3b3;
+}
+.pf1-token-randomizer .encounter-denom-label {
+  opacity: 0.75;
+  font-size: 0.85em;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.pf1-token-randomizer .encounter-coin-count {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.pf1-token-randomizer .encounter-open-item,
+.pf1-token-randomizer .encounter-open-actor {
+  cursor: pointer;
+  text-decoration: underline dotted rgba(255, 255, 255, 0.3);
+  text-underline-offset: 2px;
+}
+.pf1-token-randomizer .encounter-open-item:hover,
+.pf1-token-randomizer .encounter-open-actor:hover {
+  color: var(--tr-accent);
+  text-decoration-color: var(--tr-accent);
+}
+
+/* Coin denominations, their mix-randomness slider, and the share slider that sits
+   beside the split buttons — one flex line each. */
+.pf1-token-randomizer .encounter-coin-line {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 4px 0 8px;
+}
+.pf1-token-randomizer .encounter-denom {
+  flex: 1 1 0;
+  min-width: 104px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.pf1-token-randomizer .encounter-denom-random {
+  flex: 2 1 0;
+  min-width: 170px;
+}
+.pf1-token-randomizer .encounter-denom-random .encounter-denom-label {
+  white-space: nowrap;
+}
+.pf1-token-randomizer .encounter-denom input[type="range"] {
+  width: 100%;
+  min-width: 0;
+}
+.pf1-token-randomizer .encounter-inline-slider {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pf1-token-randomizer .encounter-inline-slider input[type="range"] {
+  width: 130px;
+}
+
+/* The distribution slider hugs the split buttons rather than the far edge. */
+.pf1-token-randomizer .encounter-inline-left {
+  margin-left: 12px;
+}
+/* Each target's share in gp, ahead of its coin breakdown. */
+.pf1-token-randomizer .encounter-split-value {
+  color: var(--tr-accent);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.pf1-token-randomizer .encounter-split-coins {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Treasure mix: chance + item-size sliders per category, and the bite range. */
+.pf1-token-randomizer .encounter-category-head {
+  display: grid;
+  grid-template-columns: 1fr 130px 130px 190px;
+  gap: 8px;
+  padding: 2px 0 4px;
+}
+.pf1-token-randomizer .encounter-category-head .encounter-stat-label {
+  text-align: center;
+}
+.pf1-token-randomizer .encounter-category-row.is-off {
+  opacity: 0.45;
+}
+.pf1-token-randomizer .encounter-category-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pf1-token-randomizer .encounter-slider-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pf1-token-randomizer .encounter-slider-cell input[type="range"] {
+  flex: 1;
+  min-width: 0;
+}
+/* The coin lock sits left of the name, so it must not stretch with the flex head. Its
+   excluded state is tinted rather than merely toggled, since the card already carries two
+   other lock buttons and the icon alone does too much work. */
+.pf1-token-randomizer .encounter-coin-lock {
+  flex: 0 0 auto;
+}
+.pf1-token-randomizer .encounter-coin-lock.is-locked {
+  color: #d97b6c;
+}
+.pf1-token-randomizer .encounter-slider-cell .chance-value {
+  flex: 0 0 auto;
+  min-width: 3.4em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.pf1-token-randomizer .encounter-bulk-strip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 4px 2px;
+}
+
+/* Target and per-item locks. */
+.pf1-token-randomizer .encounter-target {
+  position: relative;
+}
+.pf1-token-randomizer .encounter-target-lock {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+}
+.pf1-token-randomizer .encounter-target-lock.is-locked {
+  color: var(--tr-accent);
+}
+.pf1-token-randomizer .encounter-target.is-locked-target {
+  border-color: var(--tr-accent);
+  background: rgba(232, 166, 62, 0.07);
+}
+.pf1-token-randomizer .encounter-target-lines {
+  padding-bottom: 22px;
+}
+
+/* Each category's own value range: two sliders standing in for a dual-thumb control. */
+
+/* Apply bar. */
+.pf1-token-randomizer .encounter-apply-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 2px 2px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  margin-top: 4px;
+}
+.pf1-token-randomizer .encounter-apply-summary,
+.pf1-token-randomizer .encounter-applied-note {
+  flex: 1;
+  opacity: 0.85;
+}
+.pf1-token-randomizer .encounter-applied-note {
+  color: var(--tr-accent);
+}
+
+/* The dual-knob ranges sit directly in the category grid, so they fill their cell. */
+.pf1-token-randomizer .encounter-category-row > .cmn-dual-range {
+  min-width: 0;
+  width: 100%;
+}
+
+/* Hoard profile bar. */
+.pf1-token-randomizer .encounter-profile-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 8px;
+}
+.pf1-token-randomizer .encounter-profile-bar select {
+  flex: 0 1 200px;
+  min-width: 0;
+}
+.pf1-token-randomizer .encounter-profile-stamp {
+  margin-left: auto;
+  opacity: 0.75;
+  font-size: 0.9em;
+}
+.pf1-token-randomizer .encounter-profile-stamp em {
+  color: var(--tr-accent);
+  font-style: normal;
 }

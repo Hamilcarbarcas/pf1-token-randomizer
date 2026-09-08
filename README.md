@@ -17,6 +17,7 @@ A Foundry VTT module for the **Pathfinder 1e** system that randomizes **ability 
   - **Name** — assembled from modular **segments** (database names, random adjectives, static text) joined left to right, with weighted filters.
   - **Skills** — the actor's legal skill-rank budget dealt out over a weighted list of skills, with optional class-skill priority and reusable profiles.
   - **Treasure** — a gold-value formula converted into a pp/gp/sp/cp coin spread.
+- **Encounter Treasure** *(optional, off by default)*. A GM window that treats a whole encounter as the unit of loot: gather its tokens, derive the encounter's CR from their summed XP, look up what it is worth, roll a hoard, hand it out, and write it in one reversible step. See [Encounter Treasure](#encounter-treasure).
 - **World defaults.** A *Token Randomizer Defaults* menu (in module settings) sets the baseline applied to every new actor. A separate *Token Randomizer Lists* menu manages the name database and adjective lists, a *Token Randomizer Stat Methods* menu adds custom ability-score arrays and dice formulas, and *Skill Profiles* / *Subskill Groups* menus manage the skill randomizer's saved settings and speciality lists.
 - **Only touches unlinked tokens.** Linked tokens (which share the actor's real data) are never modified. Re-randomization is suppressed when a token is recreated by a scene/region teleport.
 - **Obscured NPC names** *(optional)*. Show players an alternate name for a token unless they have at least **Observer** permission on it — substituted in chat and the combat tracker. Configured per name component, with a per-token override. See [Obscured NPC names](#obscured-npc-names).
@@ -60,7 +61,7 @@ You can also define your own methods (see [Custom stat methods](#custom-stat-met
 
 The six generated values are then assigned to abilities subject to:
 
-- **Min / Max constraints** — each ability's value is fitted into its allowed range (and clamped if no generated value fits).
+- **Range constraint** — each ability's value is fitted into its allowed range (and clamped if no generated value fits). Set the range with the two-knob slider: drag either knob, or type an exact score in the field at either end. The knobs cannot cross or meet, so the low end is always at least one point below the high end.
 - **Priority assignment** *(optional)* — give abilities a priority of 1–6 (6 highest). Higher-priority abilities claim the higher available scores first; equal priorities are assigned randomly. Priority is secondary to min/max.
 - **Nil** — check *Nil* to leave an ability blank ("—") instead of assigning a score. The modifier becomes +0 and the ability is treated as absent (e.g. a mindless creature with no Intelligence). This is **not** the same as a score of 0, which would give a −5 modifier. Nil abilities are excluded from the score pool so the rest still get full values.
 
@@ -241,10 +242,64 @@ Profiles can be created from either dialog, but can only be **renamed, reordered
 
 Replaces the actor's carried currency (pp/gp/sp/cp) with a freshly generated amount.
 
-- **Total Value** — a gold-piece formula supporting dice and actor roll data, e.g. `2d6*100` or `@cr * 50`. The shorthand `@cr` resolves to the actor's total CR.
-- **Coin Distribution** — how the total *value* is split across coin types (computed as gold-equivalent, then converted to coins; each coin count is rounded down, so the realized total may land slightly under the target).
-  - **Fixed** — enter a percentage per coin. The four percentages are normalized by their sum, so they need not add up to exactly 100.
-  - **Randomized** *(toggle "Randomize Distribution")* — enter a Min/Max (0–100) per coin; a random weight is rolled in each range and the four weights are normalized into proportions.
+- **Total Value** — a gold-piece formula supporting dice and actor roll data, e.g. `2d6*100` or `@cr * 50`. The shorthand `@cr` resolves to the actor's total CR. Four more shorthands give the SRD treasure-per-encounter value for that CR: `@crLow`, `@crMed` and `@crHigh` (also spelled `@crSlow`, `@crMedium`, `@crFast`). **These are per-*encounter* figures applied to a single token**, so a group of creatures wants a divisor — `@crMed / 4` for a party-sized band. The [Encounter Treasure](#encounter-treasure) window solves that properly.
+- **Coin Distribution** — how many coins of each type there are. The four numbers are relative **counts, not shares of value**: an even split of 100 gp is 9 pp, 9 gp, 9 sp and 10 cp — roughly equal *piles* — not 25 gp worth of each. The full value is always placed; whatever will not divide is made into change from the largest weighted denomination down.
+  - **Fixed** — enter a weight per coin. They are relative, so they need not add up to 100.
+  - **Randomized** *(toggle "Randomize Distribution")* — enter a Min/Max (0–100) per coin; a weight is rolled in each range.
+
+---
+
+## Encounter Treasure
+
+*Off by default.* Turn on **Enable Encounter Treasure** in the module settings and reload. Open it from the **Notes** scene-control group, the Journal directory button, or `game.modules.get("pf1-token-randomizer").api.encounters.open()`. GM only.
+
+The per-token Treasure tab answers *"what is this creature carrying?"*. This answers *"what is this fight worth?"* — which the SRD's treasure table is actually about.
+
+### Building an encounter
+
+Drag tokens onto the window, or use **Add Selected** / **Add Combatants**. Each member's CR is cached, so deleting a token later does not silently change what the encounter is worth — it stays listed as *(missing)* and still counts.
+
+The encounter's CR is derived from **summed XP**, not from the toughest creature. Six CR 5 bandits are 9,600 XP — a CR 10 encounter worth 5,450 gp at medium pace, rather than six separate 1,550 gp payouts. Pick **Slow / Medium / Fast** for your campaign's wealth track, or override the CR or the gp figure directly.
+
+Anything the members already carry is **counted against the budget**, as the SRD intends, so a well-equipped NPC generates less. Three toggles decide what counts: worn gear, coins, and consumables/ammunition. The header shows *budget — already carried — to generate*.
+
+### Rolling the mix
+
+Each treasure category has an **independent chance** of appearing at all (1–10), not a share of the budget. Turning every slider down genuinely produces a coin-heavy hoard. Categories are rolled in a **shuffled order**, and one that appears claims a slice of the *whole* hoard within its **Category value** range — so two large slices can leave the third category nothing, which is the intended drama.
+
+- **Chance** — how often this category turns up.
+- **Item values** — a range each item's size is drawn from. Low: many cheap things. High: one or two expensive ones.
+- **Category value** — how much of the hoard this category claims when it rolls.
+- The checkbox beside each name excludes it entirely.
+
+Whatever no category claims becomes **coin**, so items plus coin always equal the budget exactly. Repeat draws stack (*Amethyst ×3*). Drag any item from a compendium or the sidebar into the mix to add it by hand.
+
+**Profiles** save the whole mix — *Dragon Hoard*, *Bandit Camp*, *Wizard's Study* and *Beast Lair* ship as presets. Loading merges: a category the profile does not name keeps its current setting. The bar shows which profile a hoard came from, and marks it *(modified)* once you change anything. Profiles deliberately do **not** carry the pace or the budget overrides — those say how much the encounter is worth, not what kind of loot it holds.
+
+### Handing it out
+
+Generated items land in **Unassigned**. Drag them onto a target, or use **Even / Random / By CR**; **Return All** empties the targets again. Two independent locks:
+
+- the **padlock** in the tray keeps an item through a re-generate;
+- the **thumbtack** on a target card keeps it through *Return All*.
+
+An item already placed on a target survives a re-generate anyway, so the way to genuinely re-roll a hoard is *Return All*, then *Generate*. A **locked target** (bottom-right of its card) is skipped by every bulk button including *Return All* — useful for the wolves in a bandit encounter.
+
+A third, separate control: the **coin sack** left of a target's name keeps it out of the coin split while it still takes items — the wolves carry the gear but not the purse. Coin it already held is spread across the remaining targets, so the split still adds up to the pool.
+
+Coin is whatever the budget has left after the items, so there is nothing to type. Its denomination mix is set by count weights, with a randomness slider; a second slider spans "as even as the integers allow" through "effectively random" for both the **Even** and **By CR** splits. Every split adds back up to the pool exactly.
+
+Loot piles are not a separate concept: make one however you like and add its token as a member. Item Piles actors are CR 0, so they do not affect the budget.
+
+If you have [Item Piles](https://foundryvtt.com/packages/item-piles), the **Loot Piles Control** setting adds a **Loot Piles from Selected** button to the *token* controls, which turns the selected tokens into lootable piles. It is off as shipped, and the setting is greyed out without Item Piles. It sits with the token tools rather than beside the encounter window because switching scene layers clears the token selection.
+
+### Applying
+
+Nothing is written until **Apply to Actors**. It creates the items, equips what should be worn (per the *Equip Generated Gear* setting, overridable per item), and adds the coin. **Undo** removes exactly what it created.
+
+Apply checks every target first: if a token has been deleted, **nothing is written** — its items return to Unassigned and its coin is shared among the remaining targets in proportion to what they already hold, and you are sent back to the window.
+
+**Treasure sources.** Out of the box, *Mundane Gear* draws from the system's own item, weapon and armour compendiums. Gems, art, consumables and magic items have no source yet and will push their whole share into coin until one is pointed at them — the window marks them *(no sources)*.
 
 ---
 
@@ -252,7 +307,9 @@ Replaces the actor's carried currency (pp/gp/sp/cp) with a freshly generated amo
 
 - **Unlinked tokens only.** Linked tokens and the prototype actor are never modified.
 - **Character and NPC actors only.** Other PF1 actor types (vehicles, traps, haunts, basic actors) are skipped entirely — they get no *Randomizer* button and are never randomized off the world defaults.
-- **Treasure replaces, not adds.** Existing currency on the token is overwritten.
+- **Treasure replaces, not adds.** Existing currency on the token is overwritten. Encounter Treasure is the opposite: it *adds* to whatever the actor already has.
+- **Encounter Treasure is GM-only** and never fires on its own — it is a window you open, not something that happens at token placement.
+- **Coin weights are counts, not value.** This changed in this release; a saved distribution using more than one denomination will produce a different spread than before. Single-denomination settings are unaffected.
 - **Skills run after ability scores**, because the rank budget depends on Intelligence — so a randomized Int feeds the number of ranks dealt.
 - **Skill limitations.** Per-actor custom skills (ones you added yourself with the ＋ button on the skills tab) are never listed, never dealt ranks, and never cleared.
 - Randomization runs once per token. A token recreated by a scene/region teleport keeps its rolled values (tracked via a `randomized` token flag).
@@ -271,6 +328,15 @@ tr.getDisplayName(tokenDoc, user = game.user);      // obscured name if the gate
 tr.getSpeakerDisplayName(speaker, user = game.user); // same, resolved from a ChatMessage speaker (falls back to alias)
 tr.shouldObscure(tokenDoc, user = game.user);       // boolean: is the obscure gate active for this user?
 tr.getObscuredName(tokenDoc);                        // the raw stored obscured name, or ""
+
+tr.encounters.open(encounterId?);        // the picker, or one encounter directly
+tr.encounters.pilesFromTokens(tokens?);  // turn tokens into Item Piles loot piles
+
+tr.treasureForCR(cr, "medium");          // SRD treasure value for a CR at a pace
+tr.encounterCR([5, 5, 5, 5, 5, 5]);      // { totalXP: 9600, cr: 10 }
+tr.encounterCarriedValue(actor);         // { gp, cp, parts: { equippedGear, ... } }
+tr.rollHoard({ total, categories, mix, pools });   // pure: roll a mix into lines + coin
+tr.registerTreasureProvider(id, { generate });     // supply candidates from your own module
 
 tr.computeSkillBudget(actor);            // { adventure, background, total }
 tr.skillRankCap(actor);                  // max ranks in any one skill (character level)
