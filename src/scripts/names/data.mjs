@@ -16,6 +16,23 @@ function userNamesPath() {
   return `worlds/${game.world.id}/${MODULE_ID}-names.json`;
 }
 
+/**
+ * Whether a file exists in the world folder: true, false, or null when the answer
+ * is unknown (no browse permission, server error). A plain fetch would answer this
+ * too, but the browser logs every 404 to the console, so a world with no user data
+ * yet reports a scary-looking error on each load. Callers must treat null as "fetch
+ * anyway" — file serving is not permission-gated, so a client that cannot browse can
+ * still read the file.
+ */
+async function worldFileExists(fileName) {
+  try {
+    const { files } = await foundry.applications.apps.FilePicker.implementation.browse("data", `worlds/${game.world.id}`);
+    return files.some(f => decodeURIComponent(f).split("/").pop() === fileName);
+  } catch {
+    return null;
+  }
+}
+
 function nameKey(entry) {
   return `${entry.name}|${entry.type ?? "given"}|${entry.race ?? ""}|${entry.region ?? ""}|${entry.gender ?? ""}`;
 }
@@ -64,6 +81,7 @@ async function loadBaselineNames() {
 
 async function loadUserNames() {
   try {
+    if (await worldFileExists(`${MODULE_ID}-names.json`) === false) return [];
     // Cache-bust so a freshly imported file is read back immediately.
     const response = await fetch(`${userNamesPath()}?t=${Date.now()}`);
     if (!response.ok) return []; // 404 = no user data yet
@@ -277,6 +295,7 @@ async function loadBundledAdjectives() {
 
 async function loadUserAdjectives() {
   try {
+    if (await worldFileExists(`${MODULE_ID}-adjectives.json`) === false) return {};
     const response = await fetch(`${userAdjectivesPath()}?t=${Date.now()}`);
     if (!response.ok) return {}; // 404 = no user data yet
     const json = await response.json();
