@@ -242,7 +242,7 @@
   "TR.Skill.ExcludedRemove": "Stop excluding this skill",
   "TR.Skill.NoExclusions": "None.",
   "TR.Skill.WipeExisting": "Clear existing ranks first",
-  "TR.Skill.WipeExistingHint": "Off = add on top of the ranks the actor already has. On = zero every skill first, so the result is this roll alone. Excluded skills are never cleared.",
+  "TR.Skill.WipeExistingHint": "Off = keep the actor's ranks and deal only its unspent points. On = zero every skill first, so the result is this roll alone. Excluded skills are never cleared.",
   "TR.SkillProfile.Title": "Skill Profiles",
   "TR.SkillProfile.Intro": "Saved skill-randomizer settings that can be loaded onto any actor from the <strong>Skills</strong> tab. Rename, reorder or delete them here. To change what a profile <em>contains</em>, load it in the defaults dialog, edit it, and save it again under the same name.",
   "TR.SkillProfile.NamePlaceholder": "Name (e.g. City Guard)",

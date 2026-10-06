@@ -7,7 +7,7 @@ import { weightedPick } from "../core/util.mjs";
 import { assignScoresWithConstraints, generateScores, getAllStatMethods, shuffleArray } from "../core/stats.mjs";
 import { loadAdjectiveLists, loadNameDatabase } from "../names/data.mjs";
 import { computeDistributionProportions, distributionToCoins, resolveGoldValue } from "./treasure.mjs";
-import { buildSkillSlots, computeSkillBudget, distributeSkillRanks, expandExcludedSkills, getSkillRegistry, isArbitrarySkill, skillRankCap, slotMembers } from "../skills/logic.mjs";
+import { buildSkillSlots, computeSkillBudget, computeSpentSkillRanks, distributeSkillRanks, expandExcludedSkills, getSkillRegistry, isArbitrarySkill, remainingSkillBudget, skillRankCap, slotMembers } from "../skills/logic.mjs";
 import { getActorNameRandomizerSettings, getActorRandomizerSettings, getActorSkillRandomizerSettings, getActorTreasureRandomizerSettings } from "../core/settings.mjs";
 
 // ─── Token Creation Logic ──────────────────────────────────────────────────────
@@ -275,7 +275,11 @@ async function randomizeTokenSkills(tokenDoc) {
     }
   }
 
-  const { ranks, spent } = distributeSkillRanks(slots, budget, cap, {
+  // Adding on top deals only the points the actor hasn't spent yet.
+  const alreadySpent = wipe ? null : computeSpentSkillRanks(actor, budget);
+  const dealt = wipe ? budget : remainingSkillBudget(budget, alreadySpent);
+
+  const { ranks, spent } = distributeSkillRanks(slots, dealt, cap, {
     weights: {
       list: settings.listWeight,
       class: settings.classWeight,
@@ -299,13 +303,14 @@ async function randomizeTokenSkills(tokenDoc) {
   if (!Object.keys(updateData).length) return;
   await actor.update(updateData);
 
-  const total = budget.total;
-  if (total === 0) {
+  const total = dealt.total;
+  if (budget.total === 0) {
     console.warn(`${LOG} Skill randomizer budget is 0 for ${actor.name} (no class items?); ranks cleared only.`);
   } else if (spent < total) {
     console.warn(`${LOG} Skill randomizer left ${total - spent} of ${total} ranks unspent for ${actor.name} — everything with room is capped or excluded (cap ${cap}/skill).`);
   }
-  console.log(`${LOG} Randomized skills for ${actor.name}: ${spent}/${total} ranks (${budget.adventure} adventure + ${budget.background} background), cap ${cap} →`, assigned);
+  const prior = alreadySpent ? `, ${alreadySpent.total} already spent` : "";
+  console.log(`${LOG} Randomized skills for ${actor.name}: ${spent}/${total} ranks (${dealt.adventure} adventure + ${dealt.background} background${prior}), cap ${cap} →`, assigned);
 }
 
 

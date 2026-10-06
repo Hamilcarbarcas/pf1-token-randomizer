@@ -180,6 +180,41 @@ function computeSkillBudget(actor) {
   return budget;
 }
 
+/**
+ * Ranks the actor has already spent, split by pool the way the sheet counts them
+ * (actor-sheet.mjs `_prepareSkills`): every skill counts, excluded and custom ones
+ * included, and a skill with subskills counts only its subskills. Background ranks
+ * beyond the background budget spill into the adventure pool.
+ */
+function computeSpentSkillRanks(actor, budget) {
+  const withBackground = useBackgroundSkills();
+  let adventure = 0;
+  let background = 0;
+  for (const skill of Object.values(actor?.system?.skills ?? {})) {
+    const isBg = withBackground && skill?.background === true;
+    const ranks = skill?.subSkills != null
+      ? Object.values(skill.subSkills).reduce((sum, sub) => sum + (sub?.rank || 0), 0)
+      : (skill?.rank || 0);
+    if (isBg) background += ranks;
+    else adventure += ranks;
+  }
+  const overflow = Math.max(0, background - budget.background);
+  return {
+    adventure: adventure + overflow,
+    background: background - overflow,
+    get total() { return this.adventure + this.background; }
+  };
+}
+
+/** The budget left after what is already spent; the roll deals only this much on top. */
+function remainingSkillBudget(budget, spent) {
+  return {
+    adventure: Math.max(0, budget.adventure - spent.adventure),
+    background: Math.max(0, budget.background - spent.background),
+    get total() { return this.adventure + this.background; }
+  };
+}
+
 /** Max ranks in any one skill: the actor's character level (total class + racial HD). */
 function skillRankCap(actor) {
   return Math.max(1, actor?.system?.attributes?.hd?.total || 1);
@@ -514,7 +549,8 @@ function uniformPick(items) {
  * background skill keeps going on adventure points.
  *
  * `fromExisting` starts each candidate at the ranks it already has instead of 0 — the
- * "clear existing ranks" toggle turned off. The cap then applies to the running total.
+ * "clear existing ranks" toggle turned off. The cap then applies to the running total,
+ * and the caller passes only the unspent budget (`remainingSkillBudget`).
  * Returned ranks are always the FINAL value to write, not the delta.
  */
 function distributeSkillRanks(slots, budget, cap, { weights = {}, focus = {} } = {}, fromExisting = false) {
@@ -606,6 +642,7 @@ export {
   clampGroupWeight,
   clampSkillWeight,
   computeSkillBudget,
+  computeSpentSkillRanks,
   distributeSkillRanks,
   expandExcludedSkills,
   getKnownSubSkills,
@@ -617,6 +654,7 @@ export {
   isArbitrarySkill,
   isSkillAlias,
   parseSubSkillList,
+  remainingSkillBudget,
   seedKnownSubSkills,
   skillLabel,
   skillRankCap,

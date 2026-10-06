@@ -206,7 +206,7 @@ That's the difference between excluding a skill and setting its group's weight t
 
 #### Clearing existing ranks
 
-**Clear existing ranks first** is **off by default**, so the rolled ranks are added on top of whatever the actor already has — a hand-built statblock keeps its ranks. Note that adding to an actor that already spent its skill points can push it past its legal total.
+**Clear existing ranks first** is **off by default**, so the rolled ranks are added on top of whatever the actor already has — a hand-built statblock keeps its ranks. Only the skill points the actor hasn't spent yet are dealt, so it never ends up past its legal total; an actor whose points are all spent gets nothing added.
 
 Turn it **on** to zero every skill before dealing, so the result is the roll and nothing else — the right choice for a bare NPC you want fully generated. Either way, excluded skills are never cleared, and the max-ranks cap applies to the running total, so adding on top still can't take a skill past its maximum.
 
