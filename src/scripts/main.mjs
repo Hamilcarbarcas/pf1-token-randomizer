@@ -31,7 +31,7 @@ import { crWeights, distributeLines, splitCurrency } from "./encounter/distribut
 import { EncounterTreasureApp } from "./apps/encounter-app.mjs";
 import { EncounterPicker, openEncounters } from "./apps/encounter-picker.mjs";
 import { DEFAULT_KNOWN_SUBSKILLS, SKILL_DEFAULTS, buildSkillSlots, computeSkillBudget, seedKnownSubSkills, skillRankCap } from "./skills/logic.mjs";
-import { isAnyRandomizerEnabled } from "./core/settings.mjs";
+import { getActorNameRandomizerSettings, isAnyRandomizerEnabled } from "./core/settings.mjs";
 import { randomizeTokenAbilityScores, randomizeTokenName, randomizeTokenSkills, randomizeTokenTreasure } from "./randomizers/workers.mjs";
 import { TokenRandomizerSettings, updateRandomizerButtonColor } from "./apps/settings-app.mjs";
 import { TokenRandomizerListManager } from "./apps/list-manager.mjs";
@@ -240,6 +240,9 @@ Hooks.once("setup", () => {
     shouldObscure,
     getDisplayName,
     getSpeakerDisplayName,
+    // Resolved per-actor name config (defaults + migration applied), for console checks
+    // of which segments are hidden from non-observers.
+    getActorNameRandomizerSettings,
     // Skill randomizer internals, exposed so a GM can check what an actor would get
     // without placing a token.
     computeSkillBudget,

@@ -176,14 +176,13 @@ async function randomizeTokenName(tokenDoc) {
     return;
   }
 
-  // The real name is what the token is actually called (observers/GM see it). When the
-  // segment tags produced a distinct obscured name, stash it on the token so display-
-  // time substitution has something to show non-observers, and default the per-token
-  // obscure toggle on. Whether that substitution actually happens is gated separately
-  // by the global setting (added in a later phase); storage here is unconditional so
-  // enabling the feature later works for tokens placed after this point.
+  // The real name is what the token is actually called (observers/GM see it). Any
+  // obscured name is stashed with the per-token toggle on, even when it matches the
+  // real name: the toggle is also what lets non-observers see a name on hover where the
+  // display mode would show them none. Substitution is gated separately by the global
+  // setting; storage here is unconditional so enabling the feature later still works.
   const update = { name };
-  if (names.obscured && names.obscured !== name) {
+  if (names.obscured) {
     update[`flags.${MODULE_ID}.obscuredName`] = names.obscured;
     update[`flags.${MODULE_ID}.obscure`] = true;
   }

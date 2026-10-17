@@ -44,6 +44,7 @@
 - The minimum end of an ability range now goes up to **24** rather than 18. The two fields had different ceilings (18 and 25); both ends now share the one 0–25 domain, one point apart.
 - The randomizer tab bar is taller, so *Ability Scores* wrapping to two lines no longer shifts the row.
 - The Name tab's **Name Components** box is now collapsible, matching the new collapsible boxes on the Skills tab. Its *Clear* button has moved from the header (now a collapse control) to the foot of the box.
+- **Tokens whose name has no hidden parts now show players that name on hover.** Previously a token was only marked for obscuring when its obscured name *differed* from its real name, so an actor with every name component set to show in both names got no mark, and *Show Obscured Name on Hover* (and anything else reading the obscured name, such as a light-level tooltip) left players with no name at all, or `???`. The obscured name is now stored whenever one is built. This applies to tokens placed from now on; tokens already on the map keep their old state until re-placed or edited in Token Config.
 
 ### Fixed
 - The *Ability Scores* tab label no longer breaks to two lines on some tabs but not others. A tall tab (Name) put a scrollbar on the settings window that a short one (Skills) did not, narrowing the tab bar by the scrollbar's width only on the tall tabs; the gutter is now reserved on every tab, and the tab labels are tighter so the longest one stays on one line at the usual window widths.

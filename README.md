@@ -144,7 +144,7 @@ Both names are built together when the token is placed, so a component's random 
 
 For linked or named tokens that don't go through the placement builder — or any one-off adjustment — open the token's **configuration → Identity** tab, where an **Obscure name from non-observers** checkbox and an **Obscured name** field let you set the override directly on that token.
 
-**On-hover reveal.** A **Show Obscured Name on Hover** sub-setting (on by default) fills a common gap: if you keep NPC display names set to *Hovered by Owner* (so players get no name on mouse-over), a player who hovers — or Alt-highlights — such a token will see its **obscured** name instead of nothing. It only fills the gap: tokens whose display mode already shows everyone a name are left as-is, so this never reveals a name the display mode was hiding on purpose.
+**On-hover reveal.** A **Show Obscured Name on Hover** sub-setting (on by default) fills a common gap: if you keep NPC display names set to *Hovered by Owner* (so players get no name on mouse-over), a player who hovers — or Alt-highlights — such a token will see its **obscured** name instead of nothing. A token whose components are all *Both names* counts too: players see the same name observers do. It only fills the gap: tokens whose display mode already shows everyone a name are left as-is, so this never reveals a name the display mode was hiding on purpose.
 
 > **This is a presentation-layer feature, not a security boundary.** The token's real name is still sent to every client, so a determined player can read it via the browser console. It hides the name in the normal interface, nothing more.
 
