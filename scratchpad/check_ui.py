@@ -10,7 +10,7 @@
 
 import re, os, sys, glob
 
-os.chdir(r"c:/Code/FoundryVTT/pf1-token-randomizer")
+os.chdir(r"c:/Code/FoundryVTT/mods/pf1-token-randomizer")
 
 PAIRS = [
     ("src/scripts/apps/encounter-app.mjs", "src/templates/encounter.hbs"),

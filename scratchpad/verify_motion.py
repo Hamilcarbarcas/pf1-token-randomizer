@@ -4,8 +4,8 @@ original file. Any difference means a moved line was altered."""
 
 import os, re
 
-ORIG = r"c:\Code\FoundryVTT\pf1-token-randomizer\src\scripts\token-randomizer.mjs"
-OUT = r"c:\Code\FoundryVTT\pf1-token-randomizer\src\scripts"
+ORIG = r"c:\Code\FoundryVTT\mods\pf1-token-randomizer\src\scripts\token-randomizer.mjs"
+OUT = r"c:\Code\FoundryVTT\mods\pf1-token-randomizer\src\scripts"
 
 from split import SLICES, lines  # reuse the exact ranges the split used
 

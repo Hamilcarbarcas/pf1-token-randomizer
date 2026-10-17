@@ -104,7 +104,7 @@ globalThis.fromUuid = async () => null;
 globalThis.Roll = class {};
 globalThis.FilePicker = class {};
 
-const target = process.argv[2] ?? "c:/Code/FoundryVTT/pf1-token-randomizer/src/scripts/main.mjs";
+const target = process.argv[2] ?? "c:/Code/FoundryVTT/mods/pf1-token-randomizer/src/scripts/main.mjs";
 const url = new URL("file:///" + target);
 await import(url.href);
 

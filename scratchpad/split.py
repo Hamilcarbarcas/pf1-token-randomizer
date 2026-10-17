@@ -13,8 +13,8 @@ Verifies before writing:
 
 import os, re, posixpath
 
-SRC = r"c:\Code\FoundryVTT\pf1-token-randomizer\src\scripts\token-randomizer.mjs"
-OUT = r"c:\Code\FoundryVTT\pf1-token-randomizer\src\scripts"
+SRC = r"c:\Code\FoundryVTT\mods\pf1-token-randomizer\src\scripts\token-randomizer.mjs"
+OUT = r"c:\Code\FoundryVTT\mods\pf1-token-randomizer\src\scripts"
 
 # --- carve-outs that resolve the four backward edges -------------------------
 SEGMENT_WEIGHT = (1259, 1259)   # DEFAULT_SEGMENT_WEIGHT  -> core/const.mjs
