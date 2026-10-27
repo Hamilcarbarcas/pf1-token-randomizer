@@ -331,10 +331,10 @@ function groupMembers(group) {
 
 /**
  * Resolve one arbitrary entry's named subskills against an actor into pool candidates.
- * Subskill ids are positional per actor (`crf1`, `crf2`, …), so an existing subskill is
- * matched by NAME; when there is no match, the first free id is claimed and `create`
- * carries the payload to write, copying the parent's ability/rt/cs/acp as the system's
- * own "add subskill" control does.
+ * Subskill ids differ per actor (positional `crf1` from the system, or named keys), so an
+ * existing subskill is matched by NAME; when there is no match, the name's slug is claimed
+ * (DESIGN §2.3.1) and `create` carries the payload to write, copying the parent's
+ * ability/rt/cs/acp as the system's own "add subskill" control does.
  */
 function resolveSubSkillCandidates(actor, entry) {
   const key = entry.key;
@@ -377,9 +377,17 @@ function resolveSubSkillCandidates(actor, entry) {
     let id = idByName.get(name.toLowerCase());
     let create = null;
     if (!id) {
+      // The name's slug, as astora-mod's named subskills key them; positional only for a
+      // name that slugs to nothing.
+      const slug = pf1.utils.createTag(name);
       let n = 1;
-      while (claimed.has(`${key}${n}`)) n++;
-      id = `${key}${n}`;
+      if (slug) {
+        id = slug;
+        while (claimed.has(id)) id = `${slug}${++n}`;
+      } else {
+        while (claimed.has(`${key}${n}`)) n++;
+        id = `${key}${n}`;
+      }
       idByName.set(name.toLowerCase(), id);
       create = {
         name,
